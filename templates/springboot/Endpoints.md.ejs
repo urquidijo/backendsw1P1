@@ -1,0 +1,213 @@
+# 📡 Endpoints API - <%= projectName %>
+
+Base URL: `http://localhost:8080`
+
+---
+
+<% classes.forEach(function(cls) { %>
+## <%= cls.className %>
+
+Base path: `/api/<%= cls.pluralName %>`
+
+### Listar todos
+**URL para Postman:**
+```
+http://localhost:8080/api/<%= cls.pluralName %>
+```
+
+```http
+GET /api/<%= cls.pluralName %>
+```
+
+**Response 200:**
+```json
+[
+  {
+    "id": 1,
+<% cls.attributes.forEach(function(attr, index) { %>
+<% if (!attr.isId && !attr.isRelation) { %>
+    "<%= attr.name %>": <%= attr.sampleValue %><%= index < cls.attributes.length - 1 ? ',' : '' %>
+<% } %>
+<% }); %>
+  }
+]
+```
+
+---
+
+### Obtener por ID
+**URL para Postman:**
+```
+http://localhost:8080/api/<%= cls.pluralName %>/1
+```
+
+```http
+GET /api/<%= cls.pluralName %>/{id}
+```
+
+**Response 200:**
+```json
+{
+  "id": 1,
+<% cls.attributes.forEach(function(attr, index) { %>
+<% if (!attr.isId && !attr.isRelation) { %>
+  "<%= attr.name %>": <%= attr.sampleValue %><%= index < cls.attributes.length - 1 ? ',' : '' %>
+<% } %>
+<% }); %>
+}
+```
+
+**Response 404:**
+```json
+{
+  "message": "<%= cls.className %> not found with id: {id}"
+}
+```
+
+---
+
+### Crear nuevo
+**URL para Postman:**
+```
+http://localhost:8080/api/<%= cls.pluralName %>
+```
+
+```http
+POST /api/<%= cls.pluralName %>
+Content-Type: application/json
+
+{
+<% cls.attributes.forEach(function(attr, index) { %>
+<% if (!attr.isId && !attr.isRelation) { %>
+  "<%= attr.name %>": <%= attr.sampleValue %><%= index < cls.attributes.length - 1 ? ',' : '' %>
+<% } %>
+<% }); %>
+}
+```
+
+**Response 201:**
+```json
+{
+  "id": 1,
+<% cls.attributes.forEach(function(attr, index) { %>
+<% if (!attr.isId && !attr.isRelation) { %>
+  "<%= attr.name %>": <%= attr.sampleValue %><%= index < cls.attributes.length - 1 ? ',' : '' %>
+<% } %>
+<% }); %>
+}
+```
+
+---
+
+### Actualizar
+**URL para Postman:**
+```
+http://localhost:8080/api/<%= cls.pluralName %>/1
+```
+
+```http
+PUT /api/<%= cls.pluralName %>/{id}
+Content-Type: application/json
+
+{
+<% cls.attributes.forEach(function(attr, index) { %>
+<% if (!attr.isId && !attr.isRelation) { %>
+  "<%= attr.name %>": <%= attr.sampleValue %><%= index < cls.attributes.length - 1 ? ',' : '' %>
+<% } %>
+<% }); %>
+}
+```
+
+**Response 200:**
+```json
+{
+  "id": 1,
+<% cls.attributes.forEach(function(attr, index) { %>
+<% if (!attr.isId && !attr.isRelation) { %>
+  "<%= attr.name %>": <%= attr.sampleValue %><%= index < cls.attributes.length - 1 ? ',' : '' %>
+<% } %>
+<% }); %>
+}
+```
+
+**Response 404:**
+```json
+{
+  "message": "<%= cls.className %> not found with id: {id}"
+}
+```
+
+---
+
+### Eliminar
+**URL para Postman:**
+```
+http://localhost:8080/api/<%= cls.pluralName %>/1
+```
+
+```http
+DELETE /api/<%= cls.pluralName %>/{id}
+```
+
+**Response 204:** No Content
+
+**Response 404:**
+```json
+{
+  "message": "<%= cls.className %> not found with id: {id}"
+}
+```
+
+---
+
+<% }); %>
+
+## 🔧 Notas
+
+- Todos los endpoints devuelven JSON
+- Las fechas están en formato ISO 8601: `"2024-11-10T01:46:09"`
+- Los campos con `*` son obligatorios
+- Los IDs se generan automáticamente
+
+## 🧪 Ejemplo con cURL
+
+### Crear un <%= classes[0].className %>:
+```bash
+curl -X POST http://localhost:8080/api/<%= classes[0].pluralName %> \
+  -H "Content-Type: application/json" \
+  -d '{
+<% classes[0].attributes.forEach(function(attr, index) { %>
+<% if (!attr.isId && !attr.isRelation) { %>
+    "<%= attr.name %>": <%= attr.sampleValue %><%= index < classes[0].attributes.length - 1 ? ',' : '' %>
+<% } %>
+<% }); %>
+  }'
+```
+
+### Listar todos los <%= classes[0].pluralName %>:
+```bash
+curl http://localhost:8080/api/<%= classes[0].pluralName %>
+```
+
+### Obtener por ID:
+```bash
+curl http://localhost:8080/api/<%= classes[0].pluralName %>/1
+```
+
+### Actualizar:
+```bash
+curl -X PUT http://localhost:8080/api/<%= classes[0].pluralName %>/1 \
+  -H "Content-Type: application/json" \
+  -d '{
+<% classes[0].attributes.forEach(function(attr, index) { %>
+<% if (!attr.isId && !attr.isRelation) { %>
+    "<%= attr.name %>": <%= attr.sampleValue %><%= index < classes[0].attributes.length - 1 ? ',' : '' %>
+<% } %>
+<% }); %>
+  }'
+```
+
+### Eliminar:
+```bash
+curl -X DELETE http://localhost:8080/api/<%= classes[0].pluralName %>/1
+```

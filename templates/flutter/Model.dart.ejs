@@ -1,0 +1,132 @@
+<%
+// Helper function to map Java types to Dart types
+function mapToDartType(javaType) {
+  const typeMap = {
+    'String': 'String',
+    'Integer': 'int',
+    'Long': 'int',
+    'BigDecimal': 'double',
+    'Boolean': 'bool',
+    'LocalDate': 'DateTime',
+    'LocalDateTime': 'DateTime',
+    'Double': 'double',
+    'Float': 'double'
+  };
+  return typeMap[javaType] || 'String';
+}
+
+// Helper to convert to camelCase (Java convention for field names)
+function toCamelCase(str) {
+  if (!str) return str;
+  return str.charAt(0).toLowerCase() + str.slice(1);
+}
+
+// Helper to convert snake_case to PascalCase
+function toPascalCase(str) {
+  return str.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('');
+}
+
+// Helper to sanitize field names for Dart (remove non-ASCII characters)
+function sanitizeFieldName(str) {
+  // Replace common Spanish characters
+  const replacements = {
+    'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+    'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
+    'ñ': 'n', 'Ñ': 'N',
+    'ü': 'u', 'Ü': 'U'
+  };
+
+  return str.split('').map(char => replacements[char] || char).join('');
+}
+
+// Get scalar and MANY_TO_ONE/ONE_TO_ONE attributes (matching DTO structure)
+const dtoAttributes = attributes.filter(attr =>
+  !attr.isRelation ||
+  attr.relationType === 'MANY_TO_ONE' ||
+  (attr.relationType === 'ONE_TO_ONE' && attr.foreignKey)
+);
+%>/// <%= toPascalCase(className) %> Model
+/// Generated from UML diagram
+class <%= toPascalCase(className) %> {
+<% dtoAttributes.forEach(function(attr) { %>
+<% const dartType = attr.isRelation ? mapToDartType(attr.referencedIdType || idType) : mapToDartType(attr.type); %>
+<% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
+<% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
+  final <%= dartType %>? <%= sanitizedFieldName %>;
+<% }); %>
+
+  <%= toPascalCase(className) %>({
+<% dtoAttributes.forEach(function(attr, index) { %>
+<% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
+<% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
+    this.<%= sanitizedFieldName %>,
+<% }); %>
+  });
+
+  /// Create from JSON (from backend)
+  factory <%= toPascalCase(className) %>.fromJson(Map<String, dynamic> json) {
+    return <%= toPascalCase(className) %>(
+<% dtoAttributes.forEach(function(attr, index) { %>
+<% const dartType = attr.isRelation ? mapToDartType(attr.referencedIdType || idType) : mapToDartType(attr.type); %>
+<% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
+<% const camelCaseFieldName = toCamelCase(originalFieldName); %>
+<% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
+<% if (dartType === 'DateTime') { %>
+      <%= sanitizedFieldName %>: json['<%= camelCaseFieldName %>'] != null ? DateTime.parse(json['<%= camelCaseFieldName %>']) : null,
+<% } else if (dartType === 'int') { %>
+      <%= sanitizedFieldName %>: json['<%= camelCaseFieldName %>'] is int ? json['<%= camelCaseFieldName %>'] : (json['<%= camelCaseFieldName %>'] != null ? int.parse(json['<%= camelCaseFieldName %>'].toString()) : null),
+<% } else if (dartType === 'double') { %>
+      <%= sanitizedFieldName %>: json['<%= camelCaseFieldName %>'] is double ? json['<%= camelCaseFieldName %>'] : (json['<%= camelCaseFieldName %>'] != null ? double.parse(json['<%= camelCaseFieldName %>'].toString()) : null),
+<% } else if (dartType === 'bool') { %>
+      <%= sanitizedFieldName %>: json['<%= camelCaseFieldName %>'] as bool?,
+<% } else { %>
+      <%= sanitizedFieldName %>: json['<%= camelCaseFieldName %>'] as String?,
+<% } %>
+<% }); %>
+    );
+  }
+
+  /// Convert to JSON (to backend)
+  Map<String, dynamic> toJson() {
+    return {
+<% dtoAttributes.forEach(function(attr, index) { %>
+<% const dartType = attr.isRelation ? mapToDartType(attr.referencedIdType || idType) : mapToDartType(attr.type); %>
+<% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
+<% const camelCaseFieldName = toCamelCase(originalFieldName); %>
+<% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
+<% if (dartType === 'DateTime') { %>
+      '<%= camelCaseFieldName %>': <%= sanitizedFieldName %>?.toIso8601String(),
+<% } else { %>
+      '<%= camelCaseFieldName %>': <%= sanitizedFieldName %>,
+<% } %>
+<% }); %>
+    };
+  }
+
+  /// Create a copy with modified fields
+  <%= toPascalCase(className) %> copyWith({
+<% dtoAttributes.forEach(function(attr, index) { %>
+<% const dartType = attr.isRelation ? mapToDartType(attr.referencedIdType || idType) : mapToDartType(attr.type); %>
+<% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
+<% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
+    <%= dartType %>? <%= sanitizedFieldName %>,
+<% }); %>
+  }) {
+    return <%= toPascalCase(className) %>(
+<% dtoAttributes.forEach(function(attr, index) { %>
+<% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
+<% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
+      <%= sanitizedFieldName %>: <%= sanitizedFieldName %> ?? this.<%= sanitizedFieldName %>,
+<% }); %>
+    );
+  }
+
+  @override
+  String toString() {
+    return '<%= toPascalCase(className) %>{<%- dtoAttributes.map(attr => {
+      const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name;
+      const sanitizedFieldName = sanitizeFieldName(originalFieldName);
+      return sanitizedFieldName + ': $' + sanitizedFieldName;
+    }).join(', ') %>}';
+  }
+}

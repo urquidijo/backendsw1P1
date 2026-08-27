@@ -1,0 +1,32 @@
+name: <%= projectName.replace(/-/g, '_') %>
+description: Flutter app generated from UML diagram - <%= projectName %>
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # HTTP client for REST API calls
+  http: ^1.1.0
+
+  # State management
+  provider: ^6.1.1
+
+  # Icons
+  cupertino_icons: ^1.0.2
+
+  # Date/time formatting
+  intl: any
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

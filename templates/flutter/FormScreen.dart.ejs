@@ -1,0 +1,269 @@
+<%
+// Helper function to map Java types to Dart types
+function mapToDartType(javaType) {
+  const typeMap = {
+    'String': 'String',
+    'Integer': 'int',
+    'Long': 'int',
+    'BigDecimal': 'double',
+    'Boolean': 'bool',
+    'LocalDate': 'DateTime',
+    'LocalDateTime': 'DateTime',
+    'Double': 'double',
+    'Float': 'double'
+  };
+  return typeMap[javaType] || 'String';
+}
+
+// Helper to convert snake_case to PascalCase
+function toPascalCase(str) {
+  return str.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('');
+}
+
+// Helper to sanitize field names for Dart (remove non-ASCII characters)
+function sanitizeFieldName(str) {
+  const replacements = {
+    'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+    'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
+    'ñ': 'n', 'Ñ': 'N',
+    'ü': 'u', 'Ü': 'U'
+  };
+  return str.split('').map(char => replacements[char] || char).join('');
+}
+
+// Get editable attributes (excluding ID, ONE_TO_MANY, MANY_TO_MANY)
+const editableAttrs = attributes.filter(attr =>
+  !attr.isId &&
+  (!attr.isRelation || attr.relationType === 'MANY_TO_ONE' || (attr.relationType === 'ONE_TO_ONE' && attr.foreignKey))
+);
+%>import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+import '../../models/<%= className.toLowerCase() %>.dart';
+import '../../services/<%= className.toLowerCase() %>_service.dart';
+
+/// <%= toPascalCase(className) %> Form Screen
+/// Create or Edit <%= toPascalCase(className) %>
+class <%= toPascalCase(className) %>FormScreen extends StatefulWidget {
+  final <%= toPascalCase(className) %>? <%= varName %>;
+
+  const <%= toPascalCase(className) %>FormScreen({Key? key, this.<%= varName %>}) : super(key: key);
+
+  @override
+  State<<%= toPascalCase(className) %>FormScreen> createState() => _<%= toPascalCase(className) %>FormScreenState();
+}
+
+class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalCase(className) %>FormScreen> {
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+  bool _isEditMode = false;
+
+  // Form field controllers
+<% editableAttrs.forEach(function(attr) { %>
+<% const dartType = attr.isRelation ? mapToDartType(attr.referencedIdType || idType) : mapToDartType(attr.type); %>
+<% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
+<% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
+<% if (dartType === 'bool') { %>
+  bool _<%= sanitizedFieldName %> = false;
+<% } else if (dartType === 'DateTime') { %>
+  DateTime? _<%= sanitizedFieldName %>;
+<% } else if (dartType === 'int' || dartType === 'double') { %>
+  final _<%= sanitizedFieldName %>Controller = TextEditingController();
+<% } else { %>
+  final _<%= sanitizedFieldName %>Controller = TextEditingController();
+<% } %>
+<% }); %>
+
+  @override
+  void initState() {
+    super.initState();
+    _isEditMode = widget.<%= varName %> != null;
+
+    // Initialize fields with existing data
+    if (_isEditMode) {
+<% editableAttrs.forEach(function(attr) { %>
+<% const dartType = attr.isRelation ? mapToDartType(attr.referencedIdType || idType) : mapToDartType(attr.type); %>
+<% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
+<% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
+<% if (dartType === 'bool') { %>
+      _<%= sanitizedFieldName %> = widget.<%= varName %>!.<%= sanitizedFieldName %> ?? false;
+<% } else if (dartType === 'DateTime') { %>
+      _<%= sanitizedFieldName %> = widget.<%= varName %>!.<%= sanitizedFieldName %>;
+<% } else { %>
+      _<%= sanitizedFieldName %>Controller.text = widget.<%= varName %>!.<%= sanitizedFieldName %>?.toString() ?? '';
+<% } %>
+<% }); %>
+    }
+  }
+
+  @override
+  void dispose() {
+<% editableAttrs.forEach(function(attr) { %>
+<% const dartType = attr.isRelation ? mapToDartType(attr.referencedIdType || idType) : mapToDartType(attr.type); %>
+<% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
+<% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
+<% if (dartType !== 'bool' && dartType !== 'DateTime') { %>
+    _<%= sanitizedFieldName %>Controller.dispose();
+<% } %>
+<% }); %>
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final <%= varName %> = <%= toPascalCase(className) %>(
+        id: _isEditMode ? widget.<%= varName %>!.id : null,
+<% editableAttrs.forEach(function(attr) { %>
+<% const dartType = attr.isRelation ? mapToDartType(attr.referencedIdType || idType) : mapToDartType(attr.type); %>
+<% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
+<% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
+<% if (dartType === 'bool') { %>
+        <%= sanitizedFieldName %>: _<%= sanitizedFieldName %>,
+<% } else if (dartType === 'DateTime') { %>
+        <%= sanitizedFieldName %>: _<%= sanitizedFieldName %>,
+<% } else if (dartType === 'int') { %>
+        <%= sanitizedFieldName %>: _<%= sanitizedFieldName %>Controller.text.isNotEmpty ? int.parse(_<%= sanitizedFieldName %>Controller.text) : null,
+<% } else if (dartType === 'double') { %>
+        <%= sanitizedFieldName %>: _<%= sanitizedFieldName %>Controller.text.isNotEmpty ? double.parse(_<%= sanitizedFieldName %>Controller.text) : null,
+<% } else { %>
+        <%= sanitizedFieldName %>: _<%= sanitizedFieldName %>Controller.text.isNotEmpty ? _<%= sanitizedFieldName %>Controller.text : null,
+<% } %>
+<% }); %>
+      );
+
+      if (_isEditMode) {
+        await <%= toPascalCase(className) %>Service.update(widget.<%= varName %>!.id!, <%= varName %>);
+      } else {
+        await <%= toPascalCase(className) %>Service.create(<%= varName %>);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_isEditMode ? 'Actualizado exitosamente' : 'Creado exitosamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.of(context).pop(true);
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_isEditMode ? 'Editar <%= toPascalCase(className) %>' : 'Nuevo <%= toPascalCase(className) %>'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+<% editableAttrs.forEach(function(attr, index) { %>
+<% const dartType = attr.isRelation ? mapToDartType(attr.referencedIdType || idType) : mapToDartType(attr.type); %>
+<% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
+<% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
+<% const isRequired = !attr.nullable; %>
+<% const label = attr.isRelation ? attr.name + ' ID' : attr.name; %>
+<% if (dartType === 'bool') { %>
+                    // <%= label %> (Boolean)
+                    SwitchListTile(
+                      title: const Text('<%= label %>'),
+                      value: _<%= sanitizedFieldName %>,
+                      onChanged: (value) => setState(() => _<%= sanitizedFieldName %> = value),
+                    ),
+                    const SizedBox(height: 16),
+<% } else if (dartType === 'DateTime') { %>
+                    // <%= label %> (Date)
+                    ListTile(
+                      title: const Text('<%= label %><%= isRequired ? ' *' : '' %>'),
+                      subtitle: Text(_<%= sanitizedFieldName %> != null ? DateFormat('dd/MM/yyyy').format(_<%= sanitizedFieldName %>!) : 'Seleccionar fecha'),
+                      trailing: const Icon(Icons.calendar_today),
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: _<%= sanitizedFieldName %> ?? DateTime.now(),
+                          firstDate: DateTime(1900),
+                          lastDate: DateTime(2100),
+                        );
+                        if (date != null) {
+                          setState(() => _<%= sanitizedFieldName %> = date);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+<% } else if (dartType === 'int') { %>
+                    // <%= label %> (Integer)
+                    TextFormField(
+                      controller: _<%= sanitizedFieldName %>Controller,
+                      decoration: const InputDecoration(
+                        labelText: '<%= label %><%= isRequired ? ' *' : '' %>',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      validator: <%- isRequired ? "(value) => value == null || value.isEmpty ? 'Campo requerido' : null" : "null" %>,
+                    ),
+                    const SizedBox(height: 16),
+<% } else if (dartType === 'double') { %>
+                    // <%= label %> (Decimal)
+                    TextFormField(
+                      controller: _<%= sanitizedFieldName %>Controller,
+                      decoration: const InputDecoration(
+                        labelText: '<%= label %><%= isRequired ? ' *' : '' %>',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                      validator: <%- isRequired ? "(value) => value == null || value.isEmpty ? 'Campo requerido' : null" : "null" %>,
+                    ),
+                    const SizedBox(height: 16),
+<% } else { %>
+                    // <%= label %> (String)
+                    TextFormField(
+                      controller: _<%= sanitizedFieldName %>Controller,
+                      decoration: const InputDecoration(
+                        labelText: '<%= label %><%= isRequired ? ' *' : '' %>',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: <%= attr.type === 'String' && attr.length && attr.length > 100 ? '3' : '1' %>,
+                      validator: <%- isRequired ? "(value) => value == null || value.isEmpty ? 'Campo requerido' : null" : "null" %>,
+                    ),
+                    const SizedBox(height: 16),
+<% } %>
+<% }); %>
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: _submit,
+                      icon: Icon(_isEditMode ? Icons.save : Icons.add),
+                      label: Text(_isEditMode ? 'Guardar Cambios' : 'Crear'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.all(16),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+}

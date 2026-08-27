@@ -1,0 +1,24 @@
+<%
+// Helper function to convert field names to camelCase (Java convention)
+function toCamelCase(str) {
+  if (!str) return str;
+  // Convert first character to lowercase
+  return str.charAt(0).toLowerCase() + str.slice(1);
+}
+%>package <%= basePackage %>.repository;
+
+import <%= basePackage %>.entity.<%= className %>;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface <%= className %>Repository extends JpaRepository<<%= className %>, <%= idType %>> {
+<% if (uniqueFields && uniqueFields.length > 0) { %>
+<% uniqueFields.forEach(function(field) { %>
+    Optional<<%= className %>> findBy<%= capitalize(field.name) %>(<%= field.type %> <%= toCamelCase(field.name) %>);
+<% }); %>
+<% } %>
+}

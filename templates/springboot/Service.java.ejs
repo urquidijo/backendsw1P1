@@ -1,0 +1,90 @@
+<%
+// Helper function to convert field names to camelCase (Java convention)
+function toCamelCase(str) {
+  if (!str) return str;
+  // Convert first character to lowercase
+  return str.charAt(0).toLowerCase() + str.slice(1);
+}
+%>package <%= basePackage %>.service;
+
+import <%= basePackage %>.entity.<%= className %>;
+import <%= basePackage %>.repository.<%= className %>Repository;
+import <%= basePackage %>.dto.<%= className %>DTO;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+@Service
+@Transactional
+public class <%= className %>Service {
+
+    @Autowired
+    private <%= className %>Repository <%= varName %>Repository;
+
+    public List<<%= className %>DTO> findAll() {
+        return <%= varName %>Repository.findAll()
+            .stream()
+            .map(this::toDTO)
+            .collect(Collectors.toList());
+    }
+
+    public Optional<<%= className %>DTO> findById(<%= idType %> id) {
+        return <%= varName %>Repository.findById(id)
+            .map(this::toDTO);
+    }
+
+    public <%= className %>DTO save(<%= className %>DTO dto) {
+        <%= className %> entity = toEntity(dto);
+        <%= className %> saved = <%= varName %>Repository.save(entity);
+        return toDTO(saved);
+    }
+
+    public <%= className %>DTO update(<%= idType %> id, <%= className %>DTO dto) {
+        <%= className %> entity = <%= varName %>Repository.findById(id)
+            .orElseThrow(() -> new RuntimeException("<%= className %> not found with id: " + id));
+
+        updateEntityFromDTO(entity, dto);
+        <%= className %> updated = <%= varName %>Repository.save(entity);
+        return toDTO(updated);
+    }
+
+    public void deleteById(<%= idType %> id) {
+        <%= varName %>Repository.deleteById(id);
+    }
+
+    private <%= className %>DTO toDTO(<%= className %> entity) {
+        <%= className %>DTO dto = new <%= className %>DTO();
+<% attributes.forEach(function(attr) { %>
+<% if (!attr.isRelation) { %>
+        dto.set<%= capitalize(toCamelCase(attr.name)) %>(entity.get<%= capitalize(toCamelCase(attr.name)) %>());
+<% } else if (attr.relationType === 'MANY_TO_ONE' || (attr.relationType === 'ONE_TO_ONE' && attr.foreignKey)) { %>
+        if (entity.get<%= capitalize(toCamelCase(attr.name)) %>() != null) {
+            dto.set<%= capitalize(toCamelCase(attr.name)) %>Id(entity.get<%= capitalize(toCamelCase(attr.name)) %>().getId());
+        }
+<% } %>
+<% }); %>
+        return dto;
+    }
+
+    private <%= className %> toEntity(<%= className %>DTO dto) {
+        <%= className %> entity = new <%= className %>();
+<% attributes.forEach(function(attr) { %>
+<% if (!attr.isRelation) { %>
+        entity.set<%= capitalize(toCamelCase(attr.name)) %>(dto.get<%= capitalize(toCamelCase(attr.name)) %>());
+<% } %>
+<% }); %>
+        return entity;
+    }
+
+    private void updateEntityFromDTO(<%= className %> entity, <%= className %>DTO dto) {
+<% attributes.forEach(function(attr) { %>
+<% if (!attr.isId && !attr.isRelation) { %>
+        entity.set<%= capitalize(toCamelCase(attr.name)) %>(dto.get<%= capitalize(toCamelCase(attr.name)) %>());
+<% } %>
+<% }); %>
+    }
+}

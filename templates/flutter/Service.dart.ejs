@@ -1,0 +1,83 @@
+<%
+// Helper function to map Java types to Dart types
+function mapToDartType(javaType) {
+  const typeMap = {
+    'String': 'String',
+    'Integer': 'int',
+    'Long': 'int',
+    'BigDecimal': 'double',
+    'Boolean': 'bool',
+    'LocalDate': 'DateTime',
+    'LocalDateTime': 'DateTime',
+    'Double': 'double',
+    'Float': 'double'
+  };
+  return typeMap[javaType] || 'String';
+}
+
+// Helper to convert snake_case to PascalCase
+function toPascalCase(str) {
+  return str.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('');
+}
+%>import '../models/<%= className.toLowerCase() %>.dart';
+import '../services/api_service.dart';
+
+/// Service for <%= toPascalCase(className) %> CRUD operations
+/// Consumes REST API: /api/<%= pluralName %>
+class <%= toPascalCase(className) %>Service {
+  static const String _endpoint = '/<%= pluralName %>';
+
+  /// Get all <%= pluralName %>
+  static Future<List<<%= toPascalCase(className) %>>> getAll() async {
+    try {
+      final response = await ApiService.get(_endpoint);
+
+      if (response is List) {
+        return response.map((json) => <%= toPascalCase(className) %>.fromJson(json)).toList();
+      }
+
+      throw Exception('Invalid response format');
+    } catch (e) {
+      throw Exception('Failed to load <%= pluralName %>: $e');
+    }
+  }
+
+  /// Get <%= toPascalCase(className) %> by ID
+  static Future<<%= toPascalCase(className) %>> getById(<%= mapToDartType(idType) %> id) async {
+    try {
+      final response = await ApiService.get('$_endpoint/$id');
+      return <%= toPascalCase(className) %>.fromJson(response);
+    } catch (e) {
+      throw Exception('Failed to load <%= varName %>: $e');
+    }
+  }
+
+  /// Create new <%= toPascalCase(className) %>
+  static Future<<%= toPascalCase(className) %>> create(<%= toPascalCase(className) %> <%= varName %>) async {
+    try {
+      final response = await ApiService.post(_endpoint, <%= varName %>.toJson());
+      return <%= toPascalCase(className) %>.fromJson(response);
+    } catch (e) {
+      throw Exception('Failed to create <%= varName %>: $e');
+    }
+  }
+
+  /// Update <%= toPascalCase(className) %>
+  static Future<<%= toPascalCase(className) %>> update(<%= mapToDartType(idType) %> id, <%= toPascalCase(className) %> <%= varName %>) async {
+    try {
+      final response = await ApiService.put('$_endpoint/$id', <%= varName %>.toJson());
+      return <%= toPascalCase(className) %>.fromJson(response);
+    } catch (e) {
+      throw Exception('Failed to update <%= varName %>: $e');
+    }
+  }
+
+  /// Delete <%= toPascalCase(className) %>
+  static Future<void> delete(<%= mapToDartType(idType) %> id) async {
+    try {
+      await ApiService.delete('$_endpoint/$id');
+    } catch (e) {
+      throw Exception('Failed to delete <%= varName %>: $e');
+    }
+  }
+}

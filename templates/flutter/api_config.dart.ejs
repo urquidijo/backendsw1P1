@@ -1,0 +1,17 @@
+/// API Configuration
+/// This file contains the backend API URL configuration
+class ApiConfig {
+  // Change this to your backend URL
+  // For local development (Android Emulator): http://10.0.2.2:8080
+  // For local development (iOS Simulator): http://localhost:8080
+  // For physical device: http://YOUR_IP:8080
+  static const String baseUrl = 'http://localhost:8080';
+
+  static const String apiPrefix = '/api';
+
+  /// Get full API URL
+  static String get apiUrl => '$baseUrl$apiPrefix';
+
+  /// Timeout for HTTP requests (in seconds)
+  static const Duration timeout = Duration(seconds: 30);
+}

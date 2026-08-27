@@ -1,0 +1,147 @@
+# <%= projectName %> - Flutter App
+
+Aplicación Flutter generada automáticamente desde diagrama UML.
+
+## 📱 Características
+
+- ✅ CRUD completo para todas las entidades
+- ✅ Interfaz Material Design
+- ✅ Consumo de API REST (Spring Boot Backend)
+- ✅ Validaciones de formularios
+- ✅ Manejo de errores y estados de carga
+
+## 🚀 Requisitos Previos
+
+- [Flutter SDK](https://flutter.dev/docs/get-started/install) (>= 3.0.0)
+- [Android Studio](https://developer.android.com/studio) o [VS Code](https://code.visualstudio.com/)
+- Backend Spring Boot corriendo en `http://localhost:8080`
+
+## 📦 Instalación
+
+1. **Instalar dependencias:**
+   ```bash
+   flutter pub get
+   ```
+
+2. **Configurar URL del backend:**
+
+   Edita el archivo `lib/config/api_config.dart` y ajusta la URL según tu entorno:
+
+   ```dart
+   // Para emulador Android
+   static const String baseUrl = 'http://10.0.2.2:8080';
+
+   // Para dispositivo físico (usa tu IP local)
+   static const String baseUrl = 'http://192.168.1.100:8080';
+   ```
+
+3. **Ejecutar la app:**
+
+   **En Chrome (Web):**
+   ```bash
+   flutter run -d chrome
+   ```
+
+   **En emulador Android:**
+   ```bash
+   flutter run
+   ```
+
+## 📂 Estructura del Proyecto
+
+```
+lib/
+├── main.dart                 # Punto de entrada
+├── config/
+│   └── api_config.dart       # Configuración de API
+├── models/                   # Modelos de datos
+<% classes.forEach(function(cls) { %>
+│   ├── <%= cls.className.toLowerCase() %>.dart
+<% }); %>
+├── services/                 # Servicios API
+│   ├── api_service.dart      # Cliente HTTP base
+<% classes.forEach(function(cls) { %>
+│   ├── <%= cls.className.toLowerCase() %>_service.dart
+<% }); %>
+└── screens/                  # Pantallas
+    ├── home_screen.dart      # Dashboard principal
+<% classes.forEach(function(cls) { %>
+    └── <%= cls.className.toLowerCase() %>/
+        ├── <%= cls.className.toLowerCase() %>_list_screen.dart
+        └── <%= cls.className.toLowerCase() %>_form_screen.dart
+<% }); %>
+```
+
+## 🎯 Entidades Disponibles
+
+<% classes.forEach(function(cls) { %>
+### <%= cls.className %>
+- **Endpoint:** `/api/<%= cls.pluralName %>`
+- **Campos:**
+<% cls.attributes.filter(attr => !attr.isRelation).forEach(function(attr) { %>
+  - `<%= attr.name %>` (<%= attr.type %>)<%= attr.nullable === false ? ' *requerido*' : '' %>
+<% }); %>
+<% }); %>
+
+## 🔧 Configuración de Red
+
+### Android Emulator
+```dart
+// lib/config/api_config.dart
+static const String baseUrl = 'http://10.0.2.2:8080';
+```
+
+### iOS Simulator
+```dart
+static const String baseUrl = 'http://localhost:8080';
+```
+
+### Dispositivo Físico
+1. Obtén tu IP local:
+   - **Windows:** `ipconfig`
+   - **Linux/Mac:** `ifconfig`
+
+2. Actualiza la configuración:
+   ```dart
+   static const String baseUrl = 'http://TU_IP:8080';
+   ```
+
+## 🧪 Testing
+
+```bash
+flutter test
+```
+
+## 📱 Build para Producción
+
+### Android
+```bash
+flutter build apk --release
+```
+
+### iOS
+```bash
+flutter build ios --release
+```
+
+## 🐛 Troubleshooting
+
+### Error de conexión al backend
+- ✅ Verifica que el backend esté corriendo en `http://localhost:8080`
+- ✅ Revisa la configuración de `api_config.dart`
+- ✅ Si usas emulador Android, usa `10.0.2.2` en lugar de `localhost`
+
+### Error de dependencias
+```bash
+flutter clean
+flutter pub get
+```
+
+## 📚 Recursos
+
+- [Flutter Documentation](https://flutter.dev/docs)
+- [Material Design](https://material.io/design)
+- [HTTP Package](https://pub.dev/packages/http)
+
+---
+**Generado automáticamente** desde diagrama UML

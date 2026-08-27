@@ -1,0 +1,38 @@
+<%
+// Helper function to convert field names to camelCase (Java convention)
+function toCamelCase(str) {
+  if (!str) return str;
+  // Convert first character to lowercase
+  return str.charAt(0).toLowerCase() + str.slice(1);
+}
+%>package <%= basePackage %>.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import jakarta.validation.constraints.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class <%= className %>DTO {
+<% attributes.forEach(function(attr) { %>
+<% if (!attr.isRelation || attr.relationType === 'MANY_TO_ONE' || (attr.relationType === 'ONE_TO_ONE' && attr.foreignKey)) { %>
+<% if (!attr.nullable && !attr.isId) { %>
+    @NotNull(message = "<%= attr.name %> cannot be null")
+<% } %>
+<% if (attr.type === 'String' && !attr.nullable) { %>
+    @NotBlank(message = "<%= attr.name %> cannot be blank")
+<% } %>
+<% if (attr.unique) { %>
+    // Unique field: <%= attr.name %>
+<% } %>
+<% var fieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
+    private <%= attr.isRelation ? (attr.referencedIdType || idType) : attr.type %> <%= toCamelCase(fieldName) %>;
+<% } %>
+<% }); %>
+}

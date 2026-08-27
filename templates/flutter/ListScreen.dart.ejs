@@ -1,0 +1,236 @@
+<%
+// Helper function to map Java types to Dart types
+function mapToDartType(javaType) {
+  const typeMap = {
+    'String': 'String',
+    'Integer': 'int',
+    'Long': 'int',
+    'BigDecimal': 'double',
+    'Boolean': 'bool',
+    'LocalDate': 'DateTime',
+    'LocalDateTime': 'DateTime',
+    'Double': 'double',
+    'Float': 'double'
+  };
+  return typeMap[javaType] || 'String';
+}
+
+// Helper to convert snake_case to PascalCase
+function toPascalCase(str) {
+  return str.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('');
+}
+
+// Helper to sanitize field names for Dart (remove non-ASCII characters)
+function sanitizeFieldName(str) {
+  const replacements = {
+    'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+    'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
+    'ñ': 'n', 'Ñ': 'N',
+    'ü': 'u', 'Ü': 'U'
+  };
+  return str.split('').map(char => replacements[char] || char).join('');
+}
+
+// Get first 3-4 visible attributes for table columns (excluding ID and relations)
+const visibleAttrs = attributes.filter(attr => !attr.isId && !attr.isRelation).slice(0, 4);
+%>import 'package:flutter/material.dart';
+import '../../models/<%= className.toLowerCase() %>.dart';
+import '../../services/<%= className.toLowerCase() %>_service.dart';
+import './<%= className.toLowerCase() %>_form_screen.dart';
+
+/// <%= toPascalCase(className) %> List Screen
+/// Displays all <%= pluralName %> with CRUD operations
+class <%= toPascalCase(className) %>ListScreen extends StatefulWidget {
+  const <%= toPascalCase(className) %>ListScreen({Key? key}) : super(key: key);
+
+  @override
+  State<<%= toPascalCase(className) %>ListScreen> createState() => _<%= toPascalCase(className) %>ListScreenState();
+}
+
+class _<%= toPascalCase(className) %>ListScreenState extends State<<%= toPascalCase(className) %>ListScreen> {
+  List<<%= toPascalCase(className) %>> _<%= pluralName %> = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final data = await <%= toPascalCase(className) %>Service.getAll();
+      setState(() {
+        _<%= pluralName %> = data;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _delete(<%= mapToDartType(idType) %> id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar'),
+        content: const Text('¿Está seguro de eliminar este registro?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await <%= toPascalCase(className) %>Service.delete(id);
+        _loadData();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Registro eliminado exitosamente')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error al eliminar: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
+  void _navigateToForm([<%= toPascalCase(className) %>? <%= varName %>]) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => <%= toPascalCase(className) %>FormScreen(<%= varName %>: <%= varName %>),
+      ),
+    );
+
+    if (result == true) {
+      _loadData();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('<%= toPascalCase(className) %>'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _errorMessage != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error, size: 64, color: Colors.red),
+                      const SizedBox(height: 16),
+                      Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: _loadData,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Reintentar'),
+                      ),
+                    ],
+                  ),
+                )
+              : _<%= pluralName %>.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.inbox, size: 64, color: Colors.grey),
+                          const SizedBox(height: 16),
+                          const Text('No hay registros'),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: () => _navigateToForm(),
+                            icon: const Icon(Icons.add),
+                            label: const Text('Crear Nuevo'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _loadData,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: DataTable(
+                            columns: [
+                              const DataColumn(label: Text('ID')),
+<% visibleAttrs.forEach(function(attr) { %>
+                              const DataColumn(label: Text('<%= attr.name %>')),
+<% }); %>
+                              const DataColumn(label: Text('Acciones')),
+                            ],
+                            rows: _<%= pluralName %>.map((<%= varName %>) {
+                              return DataRow(
+                                cells: [
+                                  DataCell(Text(<%= varName %>.id?.toString() ?? '')),
+<% visibleAttrs.forEach(function(attr) { %>
+<% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
+<% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
+<% if (mapToDartType(attr.type) === 'DateTime') { %>
+                                  DataCell(Text(<%= varName %>.<%= sanitizedFieldName %> != null ? '${<%= varName %>.<%= sanitizedFieldName %>!.day}/${<%= varName %>.<%= sanitizedFieldName %>!.month}/${<%= varName %>.<%= sanitizedFieldName %>!.year}' : '')),
+<% } else if (mapToDartType(attr.type) === 'bool') { %>
+                                  DataCell(Icon(<%= varName %>.<%= sanitizedFieldName %> == true ? Icons.check_circle : Icons.cancel, color: <%= varName %>.<%= sanitizedFieldName %> == true ? Colors.green : Colors.red)),
+<% } else { %>
+                                  DataCell(Text(<%= varName %>.<%= sanitizedFieldName %>?.toString() ?? '')),
+<% } %>
+<% }); %>
+                                  DataCell(
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.edit, color: Colors.blue),
+                                          onPressed: () => _navigateToForm(<%= varName %>),
+                                          tooltip: 'Editar',
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete, color: Colors.red),
+                                          onPressed: () => _delete(<%= varName %>.id!),
+                                          tooltip: 'Eliminar',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                    ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _navigateToForm(),
+        tooltip: 'Crear nuevo <%= varName %>',
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}

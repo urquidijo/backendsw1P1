@@ -1,0 +1,73 @@
+<%
+// Helper function to convert field names to camelCase (Java convention)
+function toCamelCase(str) {
+  if (!str) return str;
+  // Convert first character to lowercase
+  return str.charAt(0).toLowerCase() + str.slice(1);
+}
+%>package <%= basePackage %>.entity;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Set;
+
+@Entity
+@Table(name = "<%= tableName %>")
+<% if (isParentInInheritance) { %>
+@Inheritance(strategy = InheritanceType.JOINED)
+<% } %>
+@Data
+<% if (parentClass) { %>
+@EqualsAndHashCode(callSuper = true)
+<% } %>
+@NoArgsConstructor
+@AllArgsConstructor
+public class <%= className %><% if (parentClass) { %> extends <%= parentClass %><% } %> {
+<% attributes.forEach(function(attr) { %>
+<% // Skip ID attribute if this class inherits from parent (it inherits the ID) %>
+<% if (!(attr.isId && parentClass)) { %>
+<% if (attr.isId) { %>
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+<% } else if (attr.isRelation) { %>
+<% if (attr.relationType === 'MANY_TO_ONE') { %>
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "<%= attr.columnName %>", nullable = <%= attr.nullable %>)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+<% } else if (attr.relationType === 'ONE_TO_MANY') { %>
+    @OneToMany(mappedBy = "<%= attr.mappedBy %>", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+<% } else if (attr.relationType === 'MANY_TO_MANY') { %>
+    @ManyToMany
+    @JoinTable(
+        name = "<%= attr.joinTable %>",
+        joinColumns = @JoinColumn(name = "<%= attr.joinColumn %>"),
+        inverseJoinColumns = @JoinColumn(name = "<%= attr.inverseJoinColumn %>")
+    )
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+<% } else if (attr.relationType === 'ONE_TO_ONE') { %>
+<% if (attr.mappedBy) { %>
+    @OneToOne(mappedBy = "<%= attr.mappedBy %>", cascade = CascadeType.ALL)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+<% } else { %>
+    @OneToOne(cascade = CascadeType.ALL)
+    @JoinColumn(name = "<%= attr.columnName %>", referencedColumnName = "id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+<% } %>
+<% } %>
+<% } else { %>
+    @Column(name = "<%= attr.columnName %>"<% if (!attr.nullable) { %>, nullable = false<% } %><% if (attr.unique) { %>, unique = true<% } %><% if (attr.length) { %>, length = <%= attr.length %><% } %>)
+<% } %>
+    private <%- attr.type %> <%= toCamelCase(attr.name) %>;
+<% } %>
+<% }); %>
+}

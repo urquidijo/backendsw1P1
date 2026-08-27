@@ -1,0 +1,307 @@
+<%
+// Helper function to convert Java types to SQL types
+function getSqlType(javaType) {
+    const typeMap = {
+        'Long': 'BIGINT',
+        'Integer': 'INTEGER',
+        'String': 'VARCHAR(255)',
+        'Boolean': 'BOOLEAN',
+        'Double': 'DOUBLE PRECISION',
+        'Float': 'REAL',
+        'BigDecimal': 'DECIMAL(19,2)',
+        'LocalDate': 'DATE',
+        'LocalDateTime': 'TIMESTAMP',
+        'LocalTime': 'TIME',
+        'Instant': 'TIMESTAMP',
+        'Date': 'TIMESTAMP',
+        'byte[]': 'BYTEA',
+        'Byte[]': 'BYTEA'
+    };
+    return typeMap[javaType] || 'VARCHAR(255)';
+}
+
+// Helper function to find the primary key column name of a table
+function getPrimaryKeyColumn(tableName) {
+    // Find the class with this table name
+    const targetClass = classes.find(c => c.tableName === tableName);
+    if (!targetClass) {
+        return 'id'; // fallback
+    }
+
+    // Find the ID attribute
+    const idAttr = targetClass.attributes.find(a => a.isId);
+    if (idAttr) {
+        return idAttr.columnName;
+    }
+
+    return 'id'; // fallback
+}
+
+// Create a reversed copy for dropping tables (don't mutate original)
+const reversedClasses = [...classes].reverse();
+%>
+-- =====================================================
+-- Database Creation Script
+-- Project: <%= projectName %>
+-- Database: <%= dbName %>
+-- Generated from UML Diagram
+-- =====================================================
+
+-- Create database (run this separately as postgres superuser if needed)
+-- CREATE DATABASE <%= dbName %>;
+
+-- Connect to the database
+\c <%= dbName %>;
+
+-- =====================================================
+-- Drop existing tables (in reverse order due to foreign keys)
+-- =====================================================
+
+<% reversedClasses.forEach(function(cls) { %>
+DROP TABLE IF EXISTS <%= cls.tableName %> CASCADE;
+<% }); %>
+
+-- =====================================================
+-- Create tables
+-- =====================================================
+<%
+// DEBUG: Log inheritance relations
+if (typeof relations !== 'undefined' && relations) {
+  const inheritanceRels = relations.filter(r => r.type === 'INHERITANCE');
+  if (inheritanceRels.length > 0) {
+%>
+-- DEBUG: Found <%= inheritanceRels.length %> inheritance relation(s)
+<% inheritanceRels.forEach(rel => { %>
+-- DEBUG:   <%= rel.sourceClassId %> -> <%= rel.targetClassId %>
+<% }); %>
+<% } else { %>
+-- DEBUG: No inheritance relations found
+<% } %>
+<% } else { %>
+-- DEBUG: relations is undefined or null
+<% } %>
+
+<% classes.forEach(function(cls) { %>
+-- Table: <%= cls.tableName %>
+<%
+// Filter attributes that should be included as columns
+// Include scalar attributes + MANY_TO_ONE + ONE_TO_ONE (with foreignKey, meaning it has the FK)
+const columnsToInclude = cls.attributes.filter(a => {
+  if (!a.isRelation) return true; // Include all scalar attributes
+  if (a.relationType === 'MANY_TO_ONE') return true; // Include MANY_TO_ONE (has FK)
+  if (a.relationType === 'ONE_TO_ONE' && a.foreignKey) return true; // Include ONE_TO_ONE only if it has FK
+  return false; // Exclude ONE_TO_MANY, MANY_TO_MANY, and ONE_TO_ONE without FK (mappedBy)
+});
+
+// Check if this class is a child in an inheritance relationship
+let isChildInInheritance = false;
+let inheritanceInfo = '';
+
+if (typeof relations !== 'undefined' && relations) {
+  const inheritanceRelation = relations.find(r => {
+    if (r.type !== 'INHERITANCE') return false;
+
+    // Direct ID matching (sourceClassId is the child, targetClassId is the parent)
+    const matches = r.sourceClassId === cls.id;
+    if (matches) {
+      inheritanceInfo = `child=${r.sourceClassId}, parent=${r.targetClassId}`;
+    }
+    return matches;
+  });
+
+  isChildInInheritance = !!inheritanceRelation;
+}
+%>
+<% if (isChildInInheritance) { %>
+-- DEBUG: <%= cls.tableName %> is child in inheritance (<%= inheritanceInfo %>)
+<% } %>
+CREATE TABLE <%= cls.tableName %> (
+<% columnsToInclude.forEach(function(attr, index) { %>
+    <%= attr.columnName %> <%= (attr.isRelation && (attr.relationType === 'MANY_TO_ONE' || attr.relationType === 'ONE_TO_ONE')) ? 'BIGINT' : getSqlType(attr.type) %><% if (attr.isId) { %><% if (isChildInInheritance) { %> PRIMARY KEY<% } else { %> PRIMARY KEY GENERATED ALWAYS AS IDENTITY<% } %><% } else { %><% if (!attr.nullable) { %> NOT NULL<% } %><% if (attr.unique) { %> UNIQUE<% } %><% } %><% if (index < columnsToInclude.length - 1) { %>,<% } %>
+
+<% }); %>
+);
+
+<% }); %>
+
+-- =====================================================
+-- Create foreign key constraints
+-- =====================================================
+
+<% classes.forEach(function(cls) { %>
+<% cls.attributes.forEach(function(attr) { %>
+<% if (attr.isRelation && (attr.relationType === 'MANY_TO_ONE' || attr.relationType === 'ONE_TO_ONE') && attr.foreignKey) { %>
+-- <%= attr.relationType %>: <%= cls.tableName %> -> <%= attr.foreignKey.referencedTable %>
+ALTER TABLE <%= cls.tableName %>
+    ADD CONSTRAINT fk_<%= cls.tableName %>_<%= attr.foreignKey.referencedTable %>
+    FOREIGN KEY (<%= attr.columnName %>)
+    REFERENCES <%= attr.foreignKey.referencedTable %>(<%= getPrimaryKeyColumn(attr.foreignKey.referencedTable) %>)
+    ON DELETE <%= attr.foreignKey.onDelete || 'CASCADE' %>
+    ON UPDATE <%= attr.foreignKey.onUpdate || 'CASCADE' %>;
+
+<% } %>
+<% }); %>
+<% }); %>
+
+-- =====================================================
+-- Create indexes for foreign keys
+-- =====================================================
+
+<% classes.forEach(function(cls) { %>
+<% cls.attributes.forEach(function(attr) { %>
+<% if (attr.isRelation && (attr.relationType === 'MANY_TO_ONE' || attr.relationType === 'ONE_TO_ONE') && attr.foreignKey) { %>
+CREATE INDEX idx_<%= cls.tableName %>_<%= attr.columnName %>
+    ON <%= cls.tableName %>(<%= attr.columnName %>);
+
+<% } %>
+<% }); %>
+<% }); %>
+
+-- =====================================================
+-- Create junction tables for Many-to-Many relationships
+-- =====================================================
+<%
+// Helper function to parse attribute string like "id: Integer [ID]"
+function parseIntermediateAttribute(attrString) {
+  // Format: "name: Type" or "name: Type [STEREOTYPE]"
+  const match = attrString.match(/^([^:]+):\s*([^\[]+)(?:\s*\[([^\]]+)\])?/);
+  if (!match) return null;
+
+  const name = match[1].trim();
+  const type = match[2].trim();
+  const stereotype = match[3] ? match[3].trim() : null;
+
+  // Map types to SQL
+  const sqlType = getSqlType(type);
+  const isId = stereotype === 'ID' || stereotype === 'id';
+
+  return { name, sqlType, isId };
+}
+
+// Track created junction tables to avoid duplicates
+const createdJunctionTables = new Set();
+const intermediateTablesMap = new Map();
+
+// Build map of intermediate tables from relations
+if (typeof relations !== 'undefined' && relations) {
+  relations.forEach(function(rel) {
+    if (rel.intermediateTable && rel.intermediateTable.name) {
+      const tableName = rel.intermediateTable.name.toLowerCase();
+      if (!intermediateTablesMap.has(tableName)) {
+        intermediateTablesMap.set(tableName, {
+          name: tableName,
+          attributes: rel.intermediateTable.attributes || [],
+          sourceClass: rel.sourceClassId,
+          targetClass: rel.targetClassId
+        });
+      }
+    }
+  });
+}
+%>
+<% classes.forEach(function(cls) { %>
+<% cls.attributes.forEach(function(attr) { %>
+<% if (attr.isRelation && attr.relationType === 'MANY_TO_MANY' && attr.joinTable) { %>
+<% if (!createdJunctionTables.has(attr.joinTable)) { %>
+<% createdJunctionTables.add(attr.joinTable); %>
+<%
+// Check if we have intermediate table metadata from relations map or from attribute
+let intermediateTableMeta = intermediateTablesMap.get(attr.joinTable);
+if (!intermediateTableMeta && attr.intermediateTableData) {
+  intermediateTableMeta = {
+    name: attr.joinTable,
+    attributes: attr.intermediateTableData.attributes || []
+  };
+}
+const hasCustomAttributes = intermediateTableMeta && intermediateTableMeta.attributes && intermediateTableMeta.attributes.length > 0;
+%>
+CREATE TABLE IF NOT EXISTS <%= attr.joinTable %> (
+<% if (hasCustomAttributes) { %>
+    <% // Generate columns from intermediate table attributes %>
+    <% let hasExplicitId = false; %>
+    <% intermediateTableMeta.attributes.forEach(function(attrStr, idx) { %>
+    <% const parsed = parseIntermediateAttribute(attrStr); %>
+    <% if (parsed) { %>
+    <%= parsed.name %> <%= parsed.sqlType %><% if (parsed.isId) { %> PRIMARY KEY GENERATED ALWAYS AS IDENTITY<% hasExplicitId = true; %><% } else { %> NOT NULL<% } %>,
+    <% } %>
+    <% }); %>
+    <% // Add foreign keys %>
+    <%= attr.joinColumn %> BIGINT NOT NULL,
+    <%= attr.inverseJoinColumn %> BIGINT NOT NULL,
+    <% if (!hasExplicitId) { %>
+    PRIMARY KEY (<%= attr.joinColumn %>, <%= attr.inverseJoinColumn %>),
+    <% } %>
+    FOREIGN KEY (<%= attr.joinColumn %>) REFERENCES <%= cls.tableName %>(<%= getPrimaryKeyColumn(cls.tableName) %>) ON DELETE CASCADE,
+    FOREIGN KEY (<%= attr.inverseJoinColumn %>) REFERENCES <%= attr.foreignKey.referencedTable %>(<%= getPrimaryKeyColumn(attr.foreignKey.referencedTable) %>) ON DELETE CASCADE
+<% } else { %>
+    <% // Default: just FKs with composite primary key %>
+    <%= attr.joinColumn %> BIGINT NOT NULL,
+    <%= attr.inverseJoinColumn %> BIGINT NOT NULL,
+    PRIMARY KEY (<%= attr.joinColumn %>, <%= attr.inverseJoinColumn %>),
+    FOREIGN KEY (<%= attr.joinColumn %>) REFERENCES <%= cls.tableName %>(<%= getPrimaryKeyColumn(cls.tableName) %>) ON DELETE CASCADE,
+    FOREIGN KEY (<%= attr.inverseJoinColumn %>) REFERENCES <%= attr.foreignKey.referencedTable %>(<%= getPrimaryKeyColumn(attr.foreignKey.referencedTable) %>) ON DELETE CASCADE
+<% } %>
+);
+
+CREATE INDEX idx_<%= attr.joinTable %>_<%= attr.joinColumn %>
+    ON <%= attr.joinTable %>(<%= attr.joinColumn %>);
+
+CREATE INDEX idx_<%= attr.joinTable %>_<%= attr.inverseJoinColumn %>
+    ON <%= attr.joinTable %>(<%= attr.inverseJoinColumn %>);
+
+<% } %>
+<% } %>
+<% }); %>
+<% }); %>
+
+-- =====================================================
+-- Inheritance constraints (PK is also FK)
+-- =====================================================
+<%
+// Find inheritance relationships
+const inheritanceRelations = (typeof relations !== 'undefined' && relations)
+  ? relations.filter(r => r.type === 'INHERITANCE')
+  : [];
+
+if (inheritanceRelations.length > 0) {
+%>
+-- Inheritance relationships detected (child's PK is also FK to parent's PK)
+<% inheritanceRelations.forEach(function(rel) { %>
+<%
+  // Find child class (source) and parent class (target) by ID
+  const childClass = classes.find(c => c.id === rel.sourceClassId);
+  const parentClass = classes.find(c => c.id === rel.targetClassId);
+
+  if (childClass && parentClass) {
+    const childTable = childClass.tableName || childClass.className.toLowerCase();
+    const parentTable = parentClass.tableName || parentClass.className.toLowerCase();
+    const childPkColumn = getPrimaryKeyColumn(childTable);
+    const parentPkColumn = getPrimaryKeyColumn(parentTable);
+%>
+-- Inheritance: <%= childTable %> extends <%= parentTable %>
+ALTER TABLE <%= childTable %>
+    ADD CONSTRAINT fk_<%= childTable %>_<%= parentTable %>_inheritance
+    FOREIGN KEY (<%= childPkColumn %>)
+    REFERENCES <%= parentTable %>(<%= parentPkColumn %>)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE;
+
+<% } else { %>
+-- Warning: Could not resolve inheritance relationship: <%= rel.sourceClassId %> -> <%= rel.targetClassId %>
+<% } %>
+<% }); %>
+<% } %>
+
+-- =====================================================
+-- Insert sample data (optional - uncomment to use)
+-- =====================================================
+
+-- Example:
+-- INSERT INTO your_table (column1, column2) VALUES ('value1', 'value2');
+
+-- =====================================================
+-- Grant permissions (optional - adjust as needed)
+-- =====================================================
+
+-- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO your_user;
+-- GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO your_user;

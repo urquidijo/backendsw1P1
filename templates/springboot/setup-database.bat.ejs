@@ -1,0 +1,122 @@
+@echo off
+REM =====================================================
+REM Script para crear la base de datos (VERSION INTERACTIVA)
+REM Proyecto: <%= projectName %>
+REM Base de datos: <%= dbName %>
+REM =====================================================
+
+echo.
+echo ====================================================
+echo   Configuracion de Base de Datos - <%= projectName %>
+echo ====================================================
+echo.
+
+REM Configurar las credenciales de PostgreSQL
+REM NOTA: Este script es INTERACTIVO - te pedira la contraseña
+set PGUSER=postgres
+set PGHOST=localhost
+set PGPORT=5432
+
+REM Detectar version de PostgreSQL instalada
+set PSQL_PATH=
+
+REM Intentar encontrar PostgreSQL automaticamente
+for %%v in (18 17 16 15 14 13) do (
+    if exist "C:\Program Files\PostgreSQL\%%v\bin\psql.exe" (
+        set PSQL_PATH=C:\Program Files\PostgreSQL\%%v\bin\psql.exe
+        goto :found
+    )
+)
+
+:found
+if "%PSQL_PATH%"=="" (
+    echo ERROR: No se pudo encontrar PostgreSQL instalado
+    echo.
+    echo Posibles soluciones:
+    echo   1. Verifica que PostgreSQL este instalado
+    echo   2. Instala PostgreSQL desde: https://www.postgresql.org/download/
+    echo   3. Si ya esta instalado, edita PSQL_PATH en este script manualmente
+    echo.
+    pause
+    exit /b 1
+)
+
+echo [1/3] PostgreSQL encontrado: %PSQL_PATH%
+"%PSQL_PATH%" --version
+echo.
+
+echo ====================================================
+echo   IMPORTANTE: Se te pedira la contraseña de postgres
+echo ====================================================
+echo.
+echo Usuario: %PGUSER%
+echo Host: %PGHOST%:%PGPORT%
+echo.
+echo Si no conoces la contraseña, puedes:
+echo   - Usar pgAdmin para crear la base de datos manualmente
+echo   - Resetear la contraseña de postgres
+echo.
+echo ====================================================
+echo.
+pause
+
+echo.
+echo [2/3] Creando la base de datos '<%= dbName %>'...
+echo Ingresa la contraseña de postgres cuando se solicite:
+echo.
+"%PSQL_PATH%" -U %PGUSER% -h %PGHOST% -p %PGPORT% -d postgres -c "CREATE DATABASE <%= dbName %>;"
+if %errorlevel% neq 0 (
+    echo.
+    echo AVISO: La base de datos podria ya existir. Continuando...
+    echo.
+)
+
+echo.
+echo [3/3] Ejecutando script SQL para crear tablas y relaciones...
+echo Ingresa la contraseña de postgres nuevamente:
+echo.
+"%PSQL_PATH%" -U %PGUSER% -h %PGHOST% -p %PGPORT% -d <%= dbName %> -f database.sql
+
+if %errorlevel% equ 0 (
+    echo.
+    echo ====================================================
+    echo   BASE DE DATOS CONFIGURADA EXITOSAMENTE!
+    echo ====================================================
+    echo.
+    echo Base de datos: <%= dbName %>
+    echo Host: %PGHOST%:%PGPORT%
+    echo Usuario: %PGUSER%
+    echo.
+    echo Tablas creadas:
+<% classes.forEach(function(cls) { %>
+    echo   - <%= cls.tableName %>
+<% }); %>
+    echo.
+    echo Relaciones y foreign keys aplicadas correctamente.
+    echo.
+    echo ====================================================
+    echo   PROXIMO PASO: EJECUTAR EL BACKEND
+    echo ====================================================
+    echo.
+    echo Para ejecutar el backend Spring Boot:
+    echo   1. Asegurate de tener Java 17+ y Maven instalados
+    echo   2. Ejecuta: mvn spring-boot:run
+    echo   3. El backend estara disponible en: http://localhost:8080
+    echo.
+) else (
+    echo.
+    echo ====================================================
+    echo   ERROR AL CONFIGURAR LA BASE DE DATOS
+    echo ====================================================
+    echo.
+    echo Por favor, revisa los errores anteriores y:
+    echo   1. Verifica que las credenciales sean correctas
+    echo   2. Asegura que PostgreSQL este corriendo
+    echo   3. Revisa el archivo database.sql
+    echo.
+)
+
+REM Limpiar la variable de contraseña por seguridad
+set PGPASSWORD=
+
+pause

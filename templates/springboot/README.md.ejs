@@ -1,0 +1,263 @@
+# <%= projectName %>
+
+Spring Boot REST API generated from UML diagram.
+
+## 📋 Description
+
+This project was automatically generated from a UML class diagram and provides a complete RESTful API with the following features:
+
+- ✅ JPA Entities with relationships
+- ✅ Repository layer (Spring Data JPA)
+- ✅ Service layer with business logic
+- ✅ REST Controllers with CRUD operations
+- ✅ DTOs for request/response
+- ✅ Global exception handling
+- ✅ Input validation
+- ✅ PostgreSQL database
+- ✅ SQL database script
+- ✅ Environment variable configuration
+- ✅ Integration tests
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Java 17 or higher
+- Maven 3.6+
+- PostgreSQL 12+ installed locally or remotely
+
+### Installation
+
+1. **Clone or extract the project**
+
+2. **Create the database**
+
+**Opción 1: Automática (Recomendado para Windows)**
+
+Ejecuta el script de configuración automática:
+
+```bash
+.\setup-database.bat
+```
+
+Este script:
+- Creará la base de datos `<%= dbName %>`
+- Ejecutará todas las tablas con relaciones
+- Aplicará foreign key constraints
+- Creará índices para mejor rendimiento
+
+**IMPORTANTE**: Antes de ejecutar, abre `setup-database.bat` y ajusta las credenciales:
+```batch
+set PGPASSWORD=tu_contraseña
+set PGUSER=postgres
+```
+
+**Opción 2: Manual**
+
+Ejecuta el script SQL manualmente:
+
+```bash
+psql -U postgres -f database.sql
+```
+
+O conéctate a PostgreSQL y ejecuta:
+
+```sql
+psql -U postgres
+\i database.sql
+```
+
+3. **Configure environment variables (optional)**
+
+El archivo `.env` ya viene incluido con valores por defecto:
+
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=<%= dbName %>
+DB_USERNAME=postgres
+DB_PASSWORD=postgres
+SERVER_PORT=8080
+JPA_DDL_AUTO=update
+```
+
+**Si necesitas cambiar la contraseña de PostgreSQL**, edita el archivo `.env`:
+
+```bash
+# Cambia DB_PASSWORD según tu configuración
+DB_PASSWORD=tu_contraseña_aqui
+```
+
+4. **Build the project**
+
+```bash
+mvn clean install
+```
+
+4. **Run the application**
+
+```bash
+mvn spring-boot:run
+```
+
+The API will be available at: `http://localhost:8080`
+
+## 📡 API Endpoints
+
+**Para ver la documentación completa de todos los endpoints con ejemplos, consulta:** [`Endpoints.md`](./Endpoints.md)
+
+Resumen rápido:
+
+<% classes.forEach(function(cls) { %>
+### <%= cls.className %>
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/<%= cls.pluralName %>` | Get all <%= cls.pluralName %> |
+| GET | `/api/<%= cls.pluralName %>/{id}` | Get <%= cls.className %> by ID |
+| POST | `/api/<%= cls.pluralName %>` | Create new <%= cls.className %> |
+| PUT | `/api/<%= cls.pluralName %>/{id}` | Update <%= cls.className %> |
+| DELETE | `/api/<%= cls.pluralName %>/{id}` | Delete <%= cls.className %> |
+
+<% }); %>
+
+## 🧪 Testing
+
+Run all tests:
+
+```bash
+mvn test
+```
+
+Run specific test class:
+
+```bash
+mvn test -Dtest=<ClassName>ControllerTest
+```
+
+## 📦 Database
+
+The application uses PostgreSQL. Default connection details:
+
+- **Host**: localhost:5432
+- **Database**: <%= dbName %>
+- **Username**: postgres
+- **Password**: postgres
+
+### Database Setup
+
+The `database.sql` script includes:
+- Database creation
+- All table definitions with proper data types
+- Foreign key constraints for relationships
+- Indexes for performance optimization
+- Sample data templates (commented out)
+
+You can customize database credentials by:
+1. Setting environment variables (see `.env.example`)
+2. Editing `application.properties` directly
+
+## 🛠️ Project Structure
+
+```
+src/
+├── main/
+│   ├── java/
+│   │   └── <%= basePackage.replace(/\./g, '/') %>/
+│   │       ├── entity/          # JPA Entities
+│   │       ├── repository/      # Spring Data Repositories
+│   │       ├── service/         # Business Logic
+│   │       ├── controller/      # REST Controllers
+│   │       ├── dto/             # Data Transfer Objects
+│   │       └── exception/       # Exception Handlers
+│   └── resources/
+│       └── application.properties
+└── test/
+    └── java/                    # Integration Tests
+```
+
+## 🔧 Configuration
+
+### Option 1: Environment Variables (Recommended)
+
+Set these environment variables:
+
+```bash
+export DB_HOST=localhost
+export DB_PORT=5432
+export DB_NAME=<%= dbName %>
+export DB_USERNAME=postgres
+export DB_PASSWORD=postgres
+export SERVER_PORT=8080
+```
+
+### Option 2: Edit application.properties
+
+Edit `src/main/resources/application.properties` to configure:
+
+- Database connection
+- Server port
+- JPA settings
+- Logging levels
+
+The application.properties file supports environment variables with defaults:
+- `${DB_HOST:localhost}` - uses DB_HOST env var or defaults to localhost
+- See `.env.example` for all available variables
+
+## 📝 Example Request
+
+```bash
+# Create a new entity
+curl -X POST http://localhost:8080/api/<%= classes[0].pluralName %> \
+  -H "Content-Type: application/json" \
+  -d '{
+    <% classes[0].sampleData.forEach(function(field, index) { %>
+    "<%= field.key %>": <%= field.value %><% if (index < classes[0].sampleData.length - 1) { %>,<% } %>
+    <% }); %>
+  }'
+
+# Get all entities
+curl http://localhost:8080/api/<%= classes[0].pluralName %>
+
+# Get entity by ID
+curl http://localhost:8080/api/<%= classes[0].pluralName %>/1
+```
+
+## 🗄️ Database Commands
+
+```bash
+# Configuración automática (Windows)
+setup-database.bat
+
+# O crear database manualmente
+psql -U postgres -f database.sql
+
+# Conectar a la base de datos
+psql -U postgres -d <%= dbName %>
+
+# Ver tablas
+\dt
+
+# Describir estructura de tabla
+\d table_name
+
+# Eliminar base de datos (¡cuidado!)
+DROP DATABASE <%= dbName %>;
+```
+
+## 📚 Technologies Used
+
+- Spring Boot 3.2.0
+- Spring Data JPA
+- PostgreSQL
+- Lombok
+- Jakarta Validation
+- Maven
+
+## 📄 License
+
+Generated by UML Code Generator
+
+---
+
+**Generated on**: <%= new Date().toISOString() %>

@@ -1,0 +1,61 @@
+package <%= basePackage %>.controller;
+
+import <%= basePackage %>.dto.<%= className %>DTO;
+import <%= basePackage %>.service.<%= className %>Service;
+import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/<%= pluralName %>")
+@CrossOrigin(origins = "*")
+public class <%= className %>Controller {
+
+    @Autowired
+    private <%= className %>Service <%= varName %>Service;
+
+    @GetMapping
+    public ResponseEntity<List<<%= className %>DTO>> getAll() {
+        List<<%= className %>DTO> <%= varName %>s = <%= varName %>Service.findAll();
+        return ResponseEntity.ok(<%= varName %>s);
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<<%= className %>DTO> getById(@PathVariable <%= idType %> id) {
+        return <%= varName %>Service.findById(id)
+            .map(ResponseEntity::ok)
+            .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping
+    public ResponseEntity<<%= className %>DTO> create(@Valid @RequestBody <%= className %>DTO <%= varName %>DTO) {
+        <%= className %>DTO created = <%= varName %>Service.save(<%= varName %>DTO);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<<%= className %>DTO> update(
+            @PathVariable <%= idType %> id,
+            @Valid @RequestBody <%= className %>DTO <%= varName %>DTO) {
+        try {
+            <%= className %>DTO updated = <%= varName %>Service.update(id, <%= varName %>DTO);
+            return ResponseEntity.ok(updated);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable <%= idType %> id) {
+        try {
+            <%= varName %>Service.deleteById(id);
+            return ResponseEntity.noContent().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+}

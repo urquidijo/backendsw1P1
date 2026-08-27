@@ -1,0 +1,218 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  ownedWorkspaces     Workspace[]           @relation("WorkspaceOwner")
+  collaborations      WorkspaceCollaborator[]
+  diagramActivities   DiagramActivity[]
+  generatedCodes      GeneratedCode[]
+
+  @@map("users")
+}
+
+model Workspace {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Foreign Keys
+  ownerId String
+  owner   User   @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // Relations
+  collaborators WorkspaceCollaborator[]
+  diagrams      Diagram[]
+
+  @@map("workspaces")
+}
+
+enum Role {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+model WorkspaceCollaborator {
+  id       String @id @default(cuid())
+  role     Role   @default(VIEWER)
+  joinedAt DateTime @default(now())
+
+  // Foreign Keys
+  userId      String
+  workspaceId String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@map("workspace_collaborators")
+}
+
+model Diagram {
+  id        String   @id @default(cuid())
+  name      String
+  data      Json     @default("{}")
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Foreign Keys
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Relations
+  classes       UMLClass[]
+  relations     UMLRelation[]
+  activities    DiagramActivity[]
+  generatedCode GeneratedCode[]
+
+  @@map("diagrams")
+}
+
+model UMLClass {
+  id       String @id @default(cuid())
+  name     String
+  position Json   @default("{\"x\": 0, \"y\": 0}")
+
+  // Foreign Keys
+  diagramId String
+  diagram   Diagram @relation(fields: [diagramId], references: [id], onDelete: Cascade)
+
+  // Relations
+  attributes      UMLAttribute[]
+  methods         UMLMethod[]
+  sourceRelations UMLRelation[] @relation("SourceClass")
+  targetRelations UMLRelation[] @relation("TargetClass")
+
+  @@map("uml_classes")
+}
+
+model UMLAttribute {
+  id           String  @id @default(cuid())
+  name         String
+  type         String
+  multiplicity String?
+  stereotype   String?
+  nullable     Boolean @default(true)
+  unique       Boolean @default(false)
+
+  // Foreign Keys
+  classId String
+  class   UMLClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@map("uml_attributes")
+}
+
+model UMLMethod {
+  id         String @id @default(cuid())
+  name       String
+  returnType String @default("void")
+  parameters Json   @default("[]")
+  visibility String @default("public")
+
+  // Foreign Keys
+  classId String
+  class   UMLClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@map("uml_methods")
+}
+
+enum RelationType {
+  ASSOCIATION
+  INHERITANCE
+  COMPOSITION
+  AGGREGATION
+  DEPENDENCY
+  REALIZATION
+}
+
+model UMLRelation {
+  id           String       @id @default(cuid())
+  type         RelationType
+  multiplicity String?
+  name         String?
+
+  // Foreign Keys
+  sourceClassId String
+  targetClassId String
+  diagramId     String
+  sourceClass   UMLClass @relation("SourceClass", fields: [sourceClassId], references: [id], onDelete: Cascade)
+  targetClass   UMLClass @relation("TargetClass", fields: [targetClassId], references: [id], onDelete: Cascade)
+  diagram       Diagram  @relation(fields: [diagramId], references: [id], onDelete: Cascade)
+
+  @@map("uml_relations")
+}
+
+enum ActivityType {
+  CREATE_CLASS
+  UPDATE_CLASS
+  DELETE_CLASS
+  CREATE_ATTRIBUTE
+  UPDATE_ATTRIBUTE
+  DELETE_ATTRIBUTE
+  CREATE_METHOD
+  UPDATE_METHOD
+  DELETE_METHOD
+  CREATE_RELATION
+  UPDATE_RELATION
+  DELETE_RELATION
+  AI_GENERATION
+  AI_IMAGE_ANALYSIS
+}
+
+model DiagramActivity {
+  id        String       @id @default(cuid())
+  action    ActivityType
+  changes   Json         @default("{}")
+  timestamp DateTime     @default(now())
+
+  // Foreign Keys
+  userId    String
+  diagramId String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  diagram   Diagram @relation(fields: [diagramId], references: [id], onDelete: Cascade)
+
+  @@map("diagram_activities")
+}
+
+enum ProjectType {
+  SPRING_BOOT
+  FLUTTER
+  NODE_EXPRESS
+  DJANGO
+  LARAVEL
+}
+
+model GeneratedCode {
+  id          String      @id @default(cuid())
+  projectType ProjectType @default(SPRING_BOOT)
+  zipPath     String
+  generatedAt DateTime    @default(now())
+
+  // Foreign Keys
+  diagramId   String
+  generatedBy String
+  diagram     Diagram @relation(fields: [diagramId], references: [id], onDelete: Cascade)
+  user        User    @relation(fields: [generatedBy], references: [id], onDelete: Cascade)
+
+  @@map("generated_codes")
+}
