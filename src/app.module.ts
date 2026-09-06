@@ -7,6 +7,7 @@ import { DiagramModule } from './diagram/diagram.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
 import { AiChatModule } from './ai-chat/ai-chat.module';
 import { CodeGenerationModule } from './code-generation/code-generation.module';
+import { XmiExportModule } from './xmi-export/xmi-export.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { CodeGenerationModule } from './code-generation/code-generation.module';
     CollaborationModule,
     AiChatModule,
     CodeGenerationModule,
+    XmiExportModule,
   ],
 })
 export class AppModule {}
