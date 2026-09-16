@@ -59,6 +59,7 @@ public class <%= className %>Service {
     private <%= className %>DTO toDTO(<%= className %> entity) {
         <%= className %>DTO dto = new <%= className %>DTO();
 <% attributes.forEach(function(attr) { %>
+<%   if (!attr.isId && attr.name && attr.name.toLowerCase() === 'id') return; %>
 <% if (!attr.isRelation) { %>
         dto.set<%= capitalize(toCamelCase(attr.name)) %>(entity.get<%= capitalize(toCamelCase(attr.name)) %>());
 <% } else if (attr.relationType === 'MANY_TO_ONE' || (attr.relationType === 'ONE_TO_ONE' && attr.foreignKey)) { %>
@@ -73,6 +74,7 @@ public class <%= className %>Service {
     private <%= className %> toEntity(<%= className %>DTO dto) {
         <%= className %> entity = new <%= className %>();
 <% attributes.forEach(function(attr) { %>
+<%   if (!attr.isId && attr.name && attr.name.toLowerCase() === 'id') return; %>
 <% if (!attr.isRelation) { %>
         entity.set<%= capitalize(toCamelCase(attr.name)) %>(dto.get<%= capitalize(toCamelCase(attr.name)) %>());
 <% } %>
@@ -82,6 +84,7 @@ public class <%= className %>Service {
 
     private void updateEntityFromDTO(<%= className %> entity, <%= className %>DTO dto) {
 <% attributes.forEach(function(attr) { %>
+<%   if (!attr.isId && attr.name && attr.name.toLowerCase() === 'id') return; %>
 <% if (!attr.isId && !attr.isRelation) { %>
         entity.set<%= capitalize(toCamelCase(attr.name)) %>(dto.get<%= capitalize(toCamelCase(attr.name)) %>());
 <% } %>

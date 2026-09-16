@@ -7,25 +7,24 @@ function toCamelCase(str) {
 }
 %>package <%= basePackage %>.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
 public class <%= className %>DTO {
+
+    public <%= className %>DTO() {
+    }
 <% attributes.forEach(function(attr) { %>
+<%   if (!attr.isId && attr.name && attr.name.toLowerCase() === 'id') return; %>
+<%   if (attr.relationType === 'ONE_TO_MANY' || attr.relationType === 'MANY_TO_MANY') return; %>
 <% if (!attr.isRelation || attr.relationType === 'MANY_TO_ONE' || (attr.relationType === 'ONE_TO_ONE' && attr.foreignKey)) { %>
 <% if (!attr.nullable && !attr.isId) { %>
     @NotNull(message = "<%= attr.name %> cannot be null")
 <% } %>
-<% if (attr.type === 'String' && !attr.nullable) { %>
+<% if (attr.type === 'String' && !attr.nullable && !attr.isRelation && !attr.isId) { %>
     @NotBlank(message = "<%= attr.name %> cannot be blank")
 <% } %>
 <% if (attr.unique) { %>
@@ -33,6 +32,24 @@ public class <%= className %>DTO {
 <% } %>
 <% var fieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
     private <%= attr.isRelation ? (attr.referencedIdType || idType) : attr.type %> <%= toCamelCase(fieldName) %>;
+<% } %>
+<% }); %>
+
+    // Getters and Setters
+<% attributes.forEach(function(attr) { %>
+<%   if (!attr.isId && attr.name && attr.name.toLowerCase() === 'id') return; %>
+<%   if (attr.relationType === 'ONE_TO_MANY' || attr.relationType === 'MANY_TO_MANY') return; %>
+<% if (!attr.isRelation || attr.relationType === 'MANY_TO_ONE' || (attr.relationType === 'ONE_TO_ONE' && attr.foreignKey)) { %>
+<% var fieldName = toCamelCase(attr.isRelation ? (attr.name + 'Id') : attr.name); %>
+<% var methodSuffix = capitalize(fieldName); %>
+<% var fieldType = attr.isRelation ? (attr.referencedIdType || idType) : attr.type; %>
+    public <%= fieldType %> get<%= methodSuffix %>() {
+        return this.<%= fieldName %>;
+    }
+
+    public void set<%= methodSuffix %>(<%= fieldType %> <%= fieldName %>) {
+        this.<%= fieldName %> = <%= fieldName %>;
+    }
 <% } %>
 <% }); %>
 }
