@@ -91,4 +91,39 @@ class ApiService {
       throw Exception('HTTP Error: ${response.statusCode}');
     }
   }
+
+  /// AI Voice Form Filler
+  /// Envia la transcripcion de voz y la estructura de campos al backend IA para autocompletar
+  static Future<Map<String, dynamic>> fillFormWithVoice({
+    required String transcription,
+    required String entityName,
+    required List<Map<String, dynamic>> fields,
+  }) async {
+    try {
+      final url = Uri.parse(ApiConfig.aiFillFormUrl);
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'transcription': transcription,
+              'entityName': entityName,
+              'fields': fields,
+            }),
+          )
+          .timeout(const Duration(seconds: 45));
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic> && data.containsKey('data')) {
+          return Map<String, dynamic>.from(data['data']);
+        }
+        return Map<String, dynamic>.from(data);
+      } else {
+        throw Exception('Error del servidor de IA (${response.statusCode}): ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Error al comunicarse con el servicio de IA: $e');
+    }
+  }
 }

@@ -1017,4 +1017,92 @@ IMPORTANTE: Sé conciso pero informativo en tus respuestas.`;
       };
     }
   }
+
+  /**
+   * Procesa la transcripción de voz del usuario para rellenar un formulario.
+   * Extrae los campos mencionados e inventa valores coherentes para los omitidos.
+   */
+  async fillFormWithAI(transcription: string, entityName: string, fields: any[]) {
+    try {
+      console.log(`🎙️ Procesando voz para entidad ${entityName}: "${transcription}"`);
+
+      const prompt = `Eres un asistente inteligente para autocompletar formularios en una aplicación móvil.
+El usuario ha dictado por voz los datos para crear o editar un registro de la entidad "${entityName}".
+
+Transcripción de lo dicho por el usuario:
+"${transcription}"
+
+Estructura de los campos requeridos en el formulario:
+${JSON.stringify(fields, null, 2)}
+
+INSTRUCCIONES CLAVE:
+1. Extrae los valores que el usuario haya mencionado explícitamente y asígnalos al campo correspondiente.
+2. Para cualquier campo que el usuario NO haya mencionado en la transcripción:
+   - String / texto: Genera un valor realista y coherente con el contexto de "${entityName}" (ej. nombre realista, descripción breve con sentido comercial, dirección coherente).
+   - int / Integer / Long: Genera un número entero positivo razonable (ej. stock: entre 10 y 100, edad: entre 20 y 50, etc.).
+   - double / Float / BigDecimal: Genera un valor decimal realista (ej. precios coherentes como 15.50, 49.99).
+   - bool / Boolean: Asigna un booleano (true por defecto si representa disponibilidad/activo).
+   - DateTime / LocalDate: Genera una fecha en formato ISO YYYY-MM-DD coherente (hoy o fecha futura para vencimientos).
+   - Foreign Keys (campos que terminan en Id): asigna 1 si no se menciona otro.
+3. IMPORTANTE: Devuelve SOLAMENTE un objeto JSON plano donde cada clave sea exactamente el "name" de los campos proporcionados.
+4. NO uses markdown (\`\`\`json), NO des explicaciones ni texto introductorio. Devuelve únicamente el JSON válido.`;
+
+      const response = await this.anthropic.messages.create({
+        model: this.CLAUDE_MODEL_MAIN,
+        max_tokens: 2048,
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      });
+
+      let rawContent = response.content[0]?.type === 'text' ? response.content[0].text : '{}';
+      rawContent = rawContent.trim();
+
+      if (rawContent.startsWith('```json')) {
+        rawContent = rawContent.replace(/```json\n?/, '').replace(/\n?```$/, '');
+      } else if (rawContent.startsWith('```')) {
+        rawContent = rawContent.replace(/```\n?/, '').replace(/\n?```$/, '');
+      }
+
+      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        rawContent = jsonMatch[0];
+      }
+
+      const parsedData = JSON.parse(rawContent);
+      console.log('✅ Formulario autocompletado con éxito:', parsedData);
+
+      return {
+        success: true,
+        data: parsedData,
+      };
+    } catch (error) {
+      console.error('❌ Error en fillFormWithAI:', error);
+      // Fallback: si la IA falla, generar valores dummy coherentes basados en los tipos
+      const fallbackData: Record<string, any> = {};
+      for (const field of fields) {
+        const fieldName = field.name || field;
+        const type = (field.type || 'String').toLowerCase();
+        if (type.includes('int') || type.includes('long')) {
+          fallbackData[fieldName] = 10;
+        } else if (type.includes('double') || type.includes('bigdecimal') || type.includes('float')) {
+          fallbackData[fieldName] = 25.5;
+        } else if (type.includes('bool')) {
+          fallbackData[fieldName] = true;
+        } else if (type.includes('date')) {
+          fallbackData[fieldName] = new Date().toISOString().split('T')[0];
+        } else {
+          fallbackData[fieldName] = transcription.length > 0 ? transcription.substring(0, 30) : `Ejemplo ${fieldName}`;
+        }
+      }
+      return {
+        success: true,
+        data: fallbackData,
+        warning: 'Generado con fallback local por error en servicio IA',
+      };
+    }
+  }
 }

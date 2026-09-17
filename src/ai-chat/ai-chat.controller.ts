@@ -27,12 +27,34 @@ class ChatDto {
   image?: string; // Base64 encoded image
 }
 
+class FillFormDto {
+  @IsString()
+  @IsNotEmpty()
+  transcription: string;
+
+  @IsString()
+  @IsNotEmpty()
+  entityName: string;
+
+  @IsNotEmpty()
+  fields: any[];
+}
+
 @Controller('ai-chat')
-@UseGuards(JwtAuthGuard)
 export class AiChatController {
   constructor(private aiChatService: AiChatService) {}
 
+  @Post('fill-form')
+  async fillForm(@Body() fillFormDto: FillFormDto) {
+    return this.aiChatService.fillFormWithAI(
+      fillFormDto.transcription,
+      fillFormDto.entityName,
+      fillFormDto.fields,
+    );
+  }
+
   @Post('generate-uml')
+  @UseGuards(JwtAuthGuard)
   async generateUML(@Body() generateUMLDto: GenerateUMLDto, @Request() req) {
     return this.aiChatService.generateUMLFromPrompt(
       generateUMLDto.prompt,
@@ -42,6 +64,7 @@ export class AiChatController {
   }
 
   @Post('chat')
+  @UseGuards(JwtAuthGuard)
   async chat(@Body() chatDto: ChatDto, @Request() req) {
     return this.aiChatService.chatWithAI(
       chatDto.message,

@@ -5,8 +5,9 @@ Aplicación Flutter generada automáticamente desde diagrama UML.
 ## 📱 Características
 
 - ✅ CRUD completo para todas las entidades
-- ✅ Interfaz Material Design
-- ✅ Consumo de API REST (Spring Boot Backend)
+- ✅ Interfaz Material Design moderna y responsiva
+- ✅ 🎙️ **Autocompletado de Formularios por Voz con IA**: dicta los datos de cualquier entidad y la IA rellenará automáticamente los campos y deducirá coherentemente los no mencionados.
+- ✅ Consumo de API REST (Spring Boot Backend para CRUD + NestJS para IA)
 - ✅ Validaciones de formularios
 - ✅ Manejo de errores y estados de carga
 
@@ -14,25 +15,54 @@ Aplicación Flutter generada automáticamente desde diagrama UML.
 
 - [Flutter SDK](https://flutter.dev/docs/get-started/install) (>= 3.0.0)
 - [Android Studio](https://developer.android.com/studio) o [VS Code](https://code.visualstudio.com/)
-- Backend Spring Boot corriendo en `http://localhost:8080`
+- Backend Spring Boot corriendo en `http://localhost:8080` (CRUD)
+- Backend NestJS corriendo en `http://localhost:3002` (Servicio de IA para voz)
 
-## 📦 Instalación
+## 📦 Instalación y Configuración
 
 1. **Instalar dependencias:**
    ```bash
    flutter pub get
    ```
 
-2. **Configurar URL del backend:**
+2. **Permisos de Micrófono (Android / iOS):**
 
-   Edita el archivo `lib/config/api_config.dart` y ajusta la URL según tu entorno:
+   - **Android** (`android/app/src/main/AndroidManifest.xml`):
+     Dentro de la etiqueta `<manifest>` agrega:
+     ```xml
+     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+     <uses-permission android:name="android.permission.INTERNET" />
+     <uses-permission android:name="android.permission.BLUETOOTH" />
+     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+     <queries>
+         <intent>
+             <action android:name="android.speech.RecognitionService" />
+         </intent>
+     </queries>
+     ```
+
+   - **iOS** (`ios/Runner/Info.plist`):
+     Dentro de `<dict>` agrega:
+     ```xml
+     <key>NSMicrophoneUsageDescription</key>
+     <string>Esta aplicación requiere acceso al micrófono para el dictado por voz.</string>
+     <key>NSSpeechRecognitionUsageDescription</key>
+     <string>Esta aplicación requiere reconocimiento de voz para autocompletar formularios.</string>
+     ```
+
+3. **Configurar URLs de los Backends:**
+
+   Edita el archivo `lib/config/api_config.dart` según tu entorno:
 
    ```dart
-   // Para emulador Android
-   static const String baseUrl = 'http://10.0.2.2:8080';
+   // Para emulador Android (por defecto):
+   // Spring Boot CRUD: http://10.0.2.2:8080
+   // NestJS IA: http://10.0.2.2:3002
 
-   // Para dispositivo físico (usa tu IP local)
-   static const String baseUrl = 'http://192.168.1.100:8080';
+   // Para dispositivo físico (usa tu IP local de la computadora):
+   // Spring Boot CRUD: http://192.168.1.X:8080
+   // NestJS IA: http://192.168.1.X:3002
    ```
 
 3. **Ejecutar la app:**

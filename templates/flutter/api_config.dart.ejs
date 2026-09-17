@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 /// This file contains the backend API URL configuration
 class ApiConfig {
   // Automatically uses 10.0.2.2 on Android Emulator, and localhost on Web/Desktop
+  // Backend Spring Boot (CRUD)
   static String get baseUrl {
     if (kIsWeb) return 'http://localhost:8080';
     try {
@@ -13,10 +14,22 @@ class ApiConfig {
     return 'http://localhost:8080';
   }
 
+  // Backend NestJS (Servicio de IA para llenado por voz)
+  static String get aiBaseUrl {
+    if (kIsWeb) return 'http://localhost:3002';
+    try {
+      if (Platform.isAndroid) return 'http://10.0.2.2:3002';
+    } catch (_) {}
+    return 'http://localhost:3002';
+  }
+
   static const String apiPrefix = '/api';
 
   /// Get full API URL
   static String get apiUrl => '$baseUrl$apiPrefix';
+
+  /// Get full API URL for AI Voice Form Fill
+  static String get aiFillFormUrl => '$aiBaseUrl/ai-chat/fill-form';
 
   /// Timeout for HTTP requests (in seconds)
   static const Duration timeout = Duration(seconds: 30);

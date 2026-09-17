@@ -39,11 +39,13 @@ const editableAttrs = attributes.filter(attr =>
 %>import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../../models/<%= className.toLowerCase() %>.dart';
 import '../../services/<%= className.toLowerCase() %>_service.dart';
+import '../../services/api_service.dart';
 
 /// <%= toPascalCase(className) %> Form Screen
-/// Create or Edit <%= toPascalCase(className) %>
+/// Create or Edit <%= toPascalCase(className) %> with AI Voice Autofill
 class <%= toPascalCase(className) %>FormScreen extends StatefulWidget {
   final <%= toPascalCase(className) %>? <%= varName %>;
 
@@ -57,6 +59,13 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   bool _isEditMode = false;
+
+  // Speech to Text & AI Assistant State
+  late stt.SpeechToText _speech;
+  bool _speechAvailable = false;
+  bool _isListening = false;
+  bool _isAiProcessing = false;
+  String _liveTranscription = '';
 
   // Form field controllers
 <% editableAttrs.forEach(function(attr) { %>
@@ -78,6 +87,8 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
   void initState() {
     super.initState();
     _isEditMode = widget.<%= varName %> != null;
+    _speech = stt.SpeechToText();
+    _initSpeech();
 
     // Initialize fields with existing data
     if (_isEditMode) {
@@ -96,8 +107,294 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
     }
   }
 
+  /// Inicializa el motor de reconocimiento de voz del sistema
+  Future<void> _initSpeech() async {
+    try {
+      _speechAvailable = await _speech.initialize(
+        onError: (val) {
+          debugPrint('Speech error: ${val.errorMsg}');
+          if (mounted) setState(() => _isListening = false);
+        },
+        onStatus: (status) {
+          debugPrint('Speech status: $status');
+          if ((status == 'done' || status == 'notListening') && _isListening) {
+            if (mounted) {
+              setState(() => _isListening = false);
+              if (_liveTranscription.trim().isNotEmpty) {
+                _processAiVoiceFill(_liveTranscription.trim());
+              }
+            }
+          }
+        },
+      );
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('Speech init error: $e');
+    }
+  }
+
+  /// Alterna entre escuchar y detener la grabación
+  void _toggleVoiceRecording() async {
+    if (_isAiProcessing) return;
+
+    if (_isListening) {
+      await _speech.stop();
+      setState(() => _isListening = false);
+      if (_liveTranscription.trim().isNotEmpty) {
+        _processAiVoiceFill(_liveTranscription.trim());
+      }
+      return;
+    }
+
+    if (!_speechAvailable) {
+      final available = await _speech.initialize();
+      setState(() => _speechAvailable = available);
+      if (!available) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Permiso de micrófono no concedido o reconocimiento de voz no disponible.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    setState(() {
+      _isListening = true;
+      _liveTranscription = '';
+    });
+
+    _showVoiceListeningModal();
+
+    await _speech.listen(
+      onResult: (result) {
+        if (mounted) {
+          setState(() {
+            _liveTranscription = result.recognizedWords;
+          });
+        }
+      },
+      localeId: 'es_ES',
+      listenFor: const Duration(seconds: 30),
+      pauseFor: const Duration(seconds: 4),
+    );
+  }
+
+  /// Muestra una ventana modal inferior mientras escucha la voz del usuario
+  void _showVoiceListeningModal() {
+    showModalBottomSheet(
+      context: context,
+      isDismissible: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext modalContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: const EdgeInsets.all(24.0),
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24.0)),
+                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        _isListening ? Icons.mic : Icons.mic_none,
+                        color: _isListening ? Colors.red : Colors.grey,
+                        size: 30,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _isListening ? 'Escuchando tu voz...' : 'Micrófono detenido',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Dicta los datos del <%= className %>. Los campos que no menciones se completarán con IA de forma coherente.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    constraints: const BoxConstraints(minHeight: 60, maxHeight: 110),
+                    child: SingleChildScrollView(
+                      child: Text(
+                        _liveTranscription.isEmpty ? 'Habla ahora...' : _liveTranscription,
+                        style: TextStyle(
+                          fontStyle: _liveTranscription.isEmpty ? FontStyle.italic : FontStyle.normal,
+                          color: _liveTranscription.isEmpty ? Colors.grey : Colors.black87,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            _speech.stop();
+                            setState(() => _isListening = false);
+                            Navigator.pop(modalContext);
+                          },
+                          child: const Text('Cancelar'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            _speech.stop();
+                            setState(() => _isListening = false);
+                            Navigator.pop(modalContext);
+                            if (_liveTranscription.trim().isNotEmpty) {
+                              _processAiVoiceFill(_liveTranscription.trim());
+                            }
+                          },
+                          icon: const Icon(Icons.auto_awesome),
+                          label: const Text('Rellenar con IA'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      if (_isListening) {
+        _speech.stop();
+        setState(() => _isListening = false);
+        if (_liveTranscription.trim().isNotEmpty) {
+          _processAiVoiceFill(_liveTranscription.trim());
+        }
+      }
+    });
+  }
+
+  /// Procesa la voz con el servicio de IA y actualiza los campos del formulario
+  Future<void> _processAiVoiceFill(String spokenText) async {
+    setState(() => _isAiProcessing = true);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            ),
+            SizedBox(width: 12),
+            Expanded(child: Text('🧠 IA deduciendo campos faltantes y coherencias...')),
+          ],
+        ),
+        duration: Duration(seconds: 35),
+      ),
+    );
+
+    try {
+      final fieldsList = [
+<% editableAttrs.forEach(function(attr) { %>
+<% const dartType = attr.isRelation ? mapToDartType(attr.referencedIdType || idType) : mapToDartType(attr.type); %>
+<% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
+<% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
+        {
+          'name': '<%= sanitizedFieldName %>',
+          'type': '<%= dartType %>',
+          'label': '<%= attr.isRelation ? attr.name + " ID" : attr.name %>',
+          'required': <%= !attr.nullable %>,
+        },
+<% }); %>
+      ];
+
+      final filledData = await ApiService.fillFormWithVoice(
+        transcription: spokenText,
+        entityName: '<%= toPascalCase(className) %>',
+        fields: fieldsList,
+      );
+
+      if (mounted) {
+        setState(() {
+<% editableAttrs.forEach(function(attr) { %>
+<% const dartType = attr.isRelation ? mapToDartType(attr.referencedIdType || idType) : mapToDartType(attr.type); %>
+<% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
+<% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
+<% if (dartType === 'bool') { %>
+          if (filledData.containsKey('<%= sanitizedFieldName %>') && filledData['<%= sanitizedFieldName %>'] != null) {
+            final val = filledData['<%= sanitizedFieldName %>'];
+            _<%= sanitizedFieldName %> = val is bool ? val : val.toString().toLowerCase() == 'true';
+          }
+<% } else if (dartType === 'DateTime') { %>
+          if (filledData.containsKey('<%= sanitizedFieldName %>') && filledData['<%= sanitizedFieldName %>'] != null) {
+            final parsed = DateTime.tryParse(filledData['<%= sanitizedFieldName %>'].toString());
+            if (parsed != null) _<%= sanitizedFieldName %> = parsed;
+          }
+<% } else { %>
+          if (filledData.containsKey('<%= sanitizedFieldName %>') && filledData['<%= sanitizedFieldName %>'] != null) {
+            _<%= sanitizedFieldName %>Controller.text = filledData['<%= sanitizedFieldName %>'].toString();
+          }
+<% } %>
+<% }); %>
+        });
+
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✨ ¡Formulario autocompletado por voz e IA exitosamente!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al procesar con IA: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isAiProcessing = false);
+      }
+    }
+  }
+
   @override
   void dispose() {
+    _speech.stop();
 <% editableAttrs.forEach(function(attr) { %>
 <% const dartType = attr.isRelation ? mapToDartType(attr.referencedIdType || idType) : mapToDartType(attr.type); %>
 <% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
@@ -168,6 +465,43 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
       appBar: AppBar(
         title: Text(_isEditMode ? 'Editar <%= toPascalCase(className) %>' : 'Nuevo <%= toPascalCase(className) %>'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          IconButton(
+            icon: _isAiProcessing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    _isListening ? Icons.mic : Icons.mic_none,
+                    color: _isListening ? Colors.red : null,
+                  ),
+            tooltip: 'Rellenar por voz con IA',
+            onPressed: _isAiProcessing ? null : _toggleVoiceRecording,
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _isAiProcessing ? null : _toggleVoiceRecording,
+        backgroundColor: _isListening
+            ? Colors.red
+            : Theme.of(context).colorScheme.primary,
+        icon: _isAiProcessing
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
+            : Icon(_isListening ? Icons.stop : Icons.mic, color: Colors.white),
+        label: Text(
+          _isListening
+              ? 'Detener'
+              : _isAiProcessing
+                  ? 'IA Pensando...'
+                  : 'Rellenar con Voz',
+          style: const TextStyle(color: Colors.white),
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -178,6 +512,64 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Banner de asistente por voz con IA
+                    Card(
+                      elevation: 0,
+                      color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.35),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.auto_awesome,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Autocompletado Inteligente con Voz',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _isListening
+                                        ? 'Escuchando... Di lo que desees registrar'
+                                        : _isAiProcessing
+                                            ? 'IA analizando y deduciendo campos faltantes...'
+                                            : 'Toca el micrófono para dictar; la IA deducirá campos faltantes',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(_isListening ? Icons.stop_circle : Icons.mic),
+                              color: _isListening ? Colors.red : Theme.of(context).colorScheme.primary,
+                              onPressed: _isAiProcessing ? null : _toggleVoiceRecording,
+                              tooltip: 'Hablar por micrófono',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
 <% editableAttrs.forEach(function(attr, index) { %>
 <% const dartType = attr.isRelation ? mapToDartType(attr.referencedIdType || idType) : mapToDartType(attr.type); %>
 <% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
@@ -260,6 +652,7 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
                         padding: const EdgeInsets.all(16),
                       ),
                     ),
+                    const SizedBox(height: 60), // Margen inferior para que el FAB no tape el botón
                   ],
                 ),
               ),
