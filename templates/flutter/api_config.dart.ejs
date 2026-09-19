@@ -2,14 +2,63 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 /// API Configuration
-/// This file contains the backend API URL configuration
+/// Configuración inteligente de endpoints para Backend Spring Boot y Servicio de IA
 class ApiConfig {
-  // Backend Spring Boot (CRUD)
-  // Automatically uses 10.0.2.2 on Android Emulator, and localhost on Web/Desktop
+  /// IP personalizada para dispositivo físico por Wi-Fi (ej: '192.168.1.35')
+  /// Puedes configurarla aquí o directamente desde la app en el botón ⚙️ de la pantalla principal.
+  static String customServerIp = '';
+
+  /// URL personalizada activa (fijada en tiempo de ejecución)
+  static String? _customBaseUrl;
+
+  /// URL por defecto para Android
+  /// - 127.0.0.1: Funciona en teléfonos físicos vía USB ejecutando: adb reverse tcp:8080 tcp:8080
+  /// - 10.0.2.2: Funciona en el emulador de Android Studio
+  static String _activeAndroidUrl = 'http://127.0.0.1:8080';
+
+  /// Indica si el usuario fijó manualmente una URL
+  static bool get hasCustomUrl => (_customBaseUrl != null && _customBaseUrl!.isNotEmpty) || customServerIp.trim().isNotEmpty;
+
+  /// Cambia la URL base del backend Spring Boot
+  static void setBaseUrl(String url) {
+    String clean = url.trim();
+    if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+      clean = 'http://$clean';
+    }
+    _customBaseUrl = clean.replaceAll(RegExp(r'/+$'), '');
+  }
+
+  /// Configura modo USB para teléfono físico (127.0.0.1:8080 con adb reverse)
+  static void useUsbMode() {
+    _customBaseUrl = 'http://127.0.0.1:8080';
+    _activeAndroidUrl = 'http://127.0.0.1:8080';
+  }
+
+  /// Configura modo Emulador oficial (10.0.2.2:8080)
+  static void useEmulatorMode() {
+    _customBaseUrl = 'http://10.0.2.2:8080';
+    _activeAndroidUrl = 'http://10.0.2.2:8080';
+  }
+
+  /// Configura una IP Wi-Fi local de la PC (ej: '192.168.1.35')
+  static void useCustomIp(String ip) {
+    customServerIp = ip.trim();
+    final cleanIp = ip.trim().replaceFirst(RegExp(r'^https?://'), '').replaceAll(RegExp(r'/+$'), '');
+    _customBaseUrl = 'http://$cleanIp:8080';
+  }
+
+  /// Backend Spring Boot (CRUD)
   static String get baseUrl {
+    if (_customBaseUrl != null && _customBaseUrl!.isNotEmpty) {
+      return _customBaseUrl!;
+    }
+    if (customServerIp.trim().isNotEmpty) {
+      final cleanIp = customServerIp.trim().replaceFirst(RegExp(r'^https?://'), '').replaceAll(RegExp(r'/+$'), '');
+      return 'http://$cleanIp:8080';
+    }
     if (kIsWeb) return 'http://localhost:8080';
     try {
-      if (Platform.isAndroid) return 'http://10.0.2.2:8080';
+      if (Platform.isAndroid) return _activeAndroidUrl;
     } catch (_) {}
     return 'http://localhost:8080';
   }
@@ -21,12 +70,12 @@ class ApiConfig {
   static String get localAiUrl {
     if (kIsWeb) return 'http://localhost:3002/api';
     try {
-      if (Platform.isAndroid) return 'http://10.0.2.2:3002/api';
+      if (Platform.isAndroid) return 'http://127.0.0.1:3002/api';
     } catch (_) {}
     return 'http://localhost:3002/api';
   }
 
-  // Define si usa el backend local o el desplegado en Railway (por defecto Railway)
+  // Define si usa el backend local o el desplegado en Railway (por defecto Railway para máxima compatibilidad)
   static bool useLocalAi = false;
 
   /// URL base del servicio de IA (NestJS)
@@ -40,6 +89,6 @@ class ApiConfig {
   /// Get full API URL for AI Voice Form Fill (NestJS)
   static String get aiFillFormUrl => '$aiBaseUrl/ai-chat/fill-form';
 
-  /// Timeout for HTTP requests (in seconds)
-  static const Duration timeout = Duration(seconds: 25);
+  /// Timeout for HTTP requests
+  static const Duration timeout = Duration(seconds: 15);
 }

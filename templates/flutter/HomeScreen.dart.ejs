@@ -16,6 +16,8 @@ function getEntityIcon(name) {
   return 'Icons.auto_stories_rounded';
 }
 %>import 'package:flutter/material.dart';
+import '../config/api_config.dart';
+import '../services/api_service.dart';
 <% classes.forEach(function(cls) { %>
 import './<%= cls.className.toLowerCase() %>/<%= cls.className.toLowerCase() %>_list_screen.dart';
 <% }); %>
@@ -39,6 +41,13 @@ class HomeScreen extends StatelessWidget {
             Text('<%= projectName %>'),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_ethernet_rounded),
+            tooltip: 'Configurar Servidor Backend',
+            onPressed: () => _showServerConfigModal(context),
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -279,6 +288,230 @@ class HomeScreen extends StatelessWidget {
           ),
         ),
       ),
+  }
+
+  void _showServerConfigModal(BuildContext context) {
+    final textController = TextEditingController(
+      text: ApiConfig.customServerIp.isNotEmpty 
+          ? ApiConfig.customServerIp 
+          : (ApiConfig.baseUrl.replaceAll('http://', '').replaceAll(':8080', '')),
+    );
+    String currentUrl = ApiConfig.baseUrl;
+    bool isTesting = false;
+    String? testResult;
+    bool testSuccess = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext modalContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: EdgeInsets.only(
+                top: 24,
+                left: 24,
+                right: 24,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.dns_rounded, color: Color(0xFF4F46E5)),
+                            SizedBox(width: 10),
+                            Text(
+                              'Conexión al Backend',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(modalContext),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'URL activa: $currentUrl',
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Modo de conexión rápido:',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ActionChip(
+                          avatar: const Icon(Icons.usb_rounded, size: 16, color: Color(0xFF4F46E5)),
+                          label: const Text('USB (adb reverse)'),
+                          onPressed: () {
+                            ApiConfig.useUsbMode();
+                            setModalState(() {
+                              currentUrl = ApiConfig.baseUrl;
+                              textController.text = '127.0.0.1';
+                              testResult = null;
+                            });
+                          },
+                        ),
+                        ActionChip(
+                          avatar: const Icon(Icons.phone_android_rounded, size: 16, color: Color(0xFF0284C7)),
+                          label: const Text('Emulador (10.0.2.2)'),
+                          onPressed: () {
+                            ApiConfig.useEmulatorMode();
+                            setModalState(() {
+                              currentUrl = ApiConfig.baseUrl;
+                              textController.text = '10.0.2.2';
+                              testResult = null;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'O ingresa la IP local de tu PC (para Wi-Fi):',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: textController,
+                      decoration: InputDecoration(
+                        hintText: 'Ej: 192.168.1.35',
+                        prefixText: 'http://',
+                        suffixText: ':8080',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      ),
+                      keyboardType: TextInputType.text,
+                      onChanged: (val) {
+                        setModalState(() {
+                          testResult = null;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    if (testResult != null)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: testSuccess ? const Color(0xFFF0FDF4) : const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: testSuccess ? const Color(0xFFBBF7D0) : const Color(0xFFFECACA)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              testSuccess ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                              color: testSuccess ? Colors.green : Colors.red,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                testResult!,
+                                style: TextStyle(
+                                  color: testSuccess ? const Color(0xFF166534) : const Color(0xFF991B1B),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: isTesting
+                                ? null
+                                : () async {
+                                    final ip = textController.text.trim();
+                                    final testUrl = ip.isEmpty
+                                        ? currentUrl
+                                        : (ip.startsWith('http') ? ip : 'http://$ip:8080');
+
+                                    setModalState(() {
+                                      isTesting = true;
+                                      testResult = 'Probando conexión con $testUrl...';
+                                    });
+
+                                    final ok = await ApiService.testConnection(testUrl);
+
+                                    setModalState(() {
+                                      isTesting = false;
+                                      testSuccess = ok;
+                                      testResult = ok
+                                          ? '✅ ¡Conexión exitosa con Spring Boot!'
+                                          : '❌ No responde en $testUrl.\nSi estás por USB recuerda: adb reverse tcp:8080 tcp:8080';
+                                    });
+                                  },
+                            icon: isTesting
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.bolt_rounded, size: 18),
+                            label: const Text('Probar'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              final ip = textController.text.trim();
+                              if (ip.isNotEmpty) {
+                                ApiConfig.useCustomIp(ip);
+                              }
+                              Navigator.pop(modalContext);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Servidor actualizado a: ${ApiConfig.baseUrl}'),
+                                  backgroundColor: const Color(0xFF4F46E5),
+                                  duration: const Duration(seconds: 3),
+                                ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF4F46E5),
+                              foregroundColor: Colors.white,
+                            ),
+                            icon: const Icon(Icons.save_rounded, size: 18),
+                            label: const Text('Aplicar'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      '💡 Tip: Si conectas tu teléfono por cable USB, ejecuta en la terminal de tu PC:\nadb reverse tcp:8080 tcp:8080',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontStyle: FontStyle.italic),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

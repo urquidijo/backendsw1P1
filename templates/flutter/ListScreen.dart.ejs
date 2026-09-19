@@ -97,12 +97,14 @@ class _<%= toPascalCase(className) %>ListScreenState extends State<<%= toPascalC
 
     try {
       final data = await <%= toPascalCase(className) %>Service.getAll();
+      if (!mounted) return;
       setState(() {
         _<%= pluralName %> = data;
         _filteredList = data;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = e.toString();
         _isLoading = false;

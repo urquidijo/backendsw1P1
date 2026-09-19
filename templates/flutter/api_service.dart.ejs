@@ -1,79 +1,116 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 
 /// Base API Service for HTTP requests
+/// Incluye auto-recuperación entre USB (127.0.0.1 con adb reverse) y Emulador (10.0.2.2)
 class ApiService {
+  /// Helper interno para ejecutar peticiones HTTP con auto-detección y recuperación de red
+  static Future<http.Response> _requestWithFallback(
+    Future<http.Response> Function(String fullUrl) execute,
+    String endpoint,
+  ) async {
+    final currentBase = ApiConfig.baseUrl;
+    final primaryUrl = '$currentBase${ApiConfig.apiPrefix}$endpoint';
+
+    try {
+      return await execute(primaryUrl).timeout(ApiConfig.timeout);
+    } catch (e) {
+      // Si estamos en Android y el usuario no ha fijado una IP manual, intentar alternativa
+      if (!ApiConfig.hasCustomUrl && !kIsWeb) {
+        bool isAndroid = false;
+        try {
+          isAndroid = Platform.isAndroid;
+        } catch (_) {}
+
+        if (isAndroid) {
+          // Si 127.0.0.1 falló, probar 10.0.2.2 (emulador). Si 10.0.2.2 falló, probar 127.0.0.1 (USB adb reverse)
+          final fallbackBase = currentBase.contains('127.0.0.1') || currentBase.contains('localhost')
+              ? 'http://10.0.2.2:8080'
+              : 'http://127.0.0.1:8080';
+
+          try {
+            final fallbackUrl = '$fallbackBase${ApiConfig.apiPrefix}$endpoint';
+            final response = await execute(fallbackUrl).timeout(const Duration(seconds: 4));
+            // Si tuvo éxito, fijar como activa para las siguientes llamadas
+            ApiConfig.setBaseUrl(fallbackBase);
+            return response;
+          } catch (_) {}
+        }
+      }
+
+      // Si todo falla, arrojar un mensaje amigable con instrucciones
+      throw Exception(
+        'No se pudo conectar con el backend ($currentBase).\n'
+        '• En teléfono físico (USB): ejecuta en tu PC "adb reverse tcp:8080 tcp:8080".\n'
+        '• En Wi-Fi: configura la IP de tu PC en el botón ⚙️ de la pantalla de inicio.'
+      );
+    }
+  }
+
+  /// Prueba rápida de conectividad con el backend
+  static Future<bool> testConnection([String? testBaseUrl]) async {
+    try {
+      final base = testBaseUrl ?? ApiConfig.baseUrl;
+      final uri = Uri.parse('$base${ApiConfig.apiPrefix}');
+      final response = await http.get(uri).timeout(const Duration(seconds: 4));
+      return response.statusCode < 500;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// GET request
   static Future<dynamic> get(String endpoint) async {
-    try {
-      final url = Uri.parse('${ApiConfig.apiUrl}$endpoint');
-      final response = await http
-          .get(
-            url,
-            headers: {'Content-Type': 'application/json'},
-          )
-          .timeout(ApiConfig.timeout);
-
-      return _handleResponse(response);
-    } catch (e) {
-      throw Exception('Network error: $e');
-    }
+    final response = await _requestWithFallback(
+      (url) => http.get(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+      ),
+      endpoint,
+    );
+    return _handleResponse(response);
   }
 
   /// POST request
   static Future<dynamic> post(String endpoint, Map<String, dynamic> body) async {
-    try {
-      final url = Uri.parse('${ApiConfig.apiUrl}$endpoint');
-      final response = await http
-          .post(
-            url,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(body),
-          )
-          .timeout(ApiConfig.timeout);
-
-      return _handleResponse(response);
-    } catch (e) {
-      throw Exception('Network error: $e');
-    }
+    final response = await _requestWithFallback(
+      (url) => http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      ),
+      endpoint,
+    );
+    return _handleResponse(response);
   }
 
   /// PUT request
   static Future<dynamic> put(String endpoint, Map<String, dynamic> body) async {
-    try {
-      final url = Uri.parse('${ApiConfig.apiUrl}$endpoint');
-      final response = await http
-          .put(
-            url,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(body),
-          )
-          .timeout(ApiConfig.timeout);
-
-      return _handleResponse(response);
-    } catch (e) {
-      throw Exception('Network error: $e');
-    }
+    final response = await _requestWithFallback(
+      (url) => http.put(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      ),
+      endpoint,
+    );
+    return _handleResponse(response);
   }
 
   /// DELETE request
   static Future<void> delete(String endpoint) async {
-    try {
-      final url = Uri.parse('${ApiConfig.apiUrl}$endpoint');
-      final response = await http
-          .delete(
-            url,
-            headers: {'Content-Type': 'application/json'},
-          )
-          .timeout(ApiConfig.timeout);
-
-      if (response.statusCode != 204 && response.statusCode != 200) {
-        throw Exception('Failed to delete: ${response.statusCode}');
-      }
-    } catch (e) {
-      throw Exception('Network error: $e');
+    final response = await _requestWithFallback(
+      (url) => http.delete(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+      ),
+      endpoint,
+    );
+    if (response.statusCode != 204 && response.statusCode != 200) {
+      throw Exception('Failed to delete: ${response.statusCode}');
     }
   }
 
@@ -181,7 +218,6 @@ class ApiService {
 
       // 2. Detección de fechas
       if (type.contains('date')) {
-        // Si dice mañana o futuro
         if (lowerText.contains('mañana')) {
           result[name] = DateTime.now().add(const Duration(days: 1)).toIso8601String().split('T')[0];
         } else {

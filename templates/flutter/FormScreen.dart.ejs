@@ -505,8 +505,8 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
         Navigator.of(context).pop(true);
       }
     } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );

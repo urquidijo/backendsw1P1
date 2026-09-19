@@ -51,28 +51,26 @@ Aplicación Flutter generada automáticamente desde diagrama UML.
      <string>Esta aplicación requiere reconocimiento de voz para autocompletar formularios.</string>
      ```
 
-3. **Configurar URLs de los Backends:**
+3. **Conexión con el Backend (Spring Boot e IA):**
 
-   Edita el archivo `lib/config/api_config.dart` según tu entorno:
+   La app incluye auto-recuperación y un botón de configuración ⚙️ en la pantalla principal.
 
-   ```dart
-   // Para emulador Android (por defecto):
-   // Spring Boot CRUD: http://10.0.2.2:8080
-   // NestJS IA: http://10.0.2.2:3002
-
-   // Para dispositivo físico (usa tu IP local de la computadora):
-   // Spring Boot CRUD: http://192.168.1.X:8080
-   // NestJS IA: http://192.168.1.X:3002
-   ```
-
-3. **Ejecutar la app:**
-
-   **En Chrome (Web):**
+   **Opción A: Teléfono físico conectado por cable USB (Recomendada):**
+   Ejecuta en la terminal de tu PC:
    ```bash
-   flutter run -d chrome
+   adb reverse tcp:8080 tcp:8080
+   adb reverse tcp:3002 tcp:3002
    ```
+   ¡Y listo! La app se comunicará por cable USB con tu Spring Boot de forma directa.
 
-   **En emulador Android:**
+   **Opción B: Teléfono físico conectado por Wi-Fi:**
+   En la app móvil toca el botón ⚙️ en la barra superior de la pantalla principal e ingresa la IP local de tu PC (ej: `192.168.1.35`).
+
+   **Opción C: Emulador oficial de Android:**
+   La app detecta automáticamente el emulador y se conecta a `http://10.0.2.2:8080`.
+
+4. **Ejecutar la app:**
+
    ```bash
    flutter run
    ```
