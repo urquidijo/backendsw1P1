@@ -896,7 +896,6 @@ export class CodeGenerationService {
       `${projectPath}/lib/services`,
       `${projectPath}/lib/screens`,
       `${projectPath}/lib/screens/home`,
-      `${projectPath}/android/app/src/main`,
     ];
 
     for (const dir of directories) {
@@ -919,13 +918,6 @@ export class CodeGenerationService {
     await this.renderTemplate(
       path.join(templatesDir, 'main.dart.ejs'),
       path.join(projectPath, 'lib/main.dart'),
-      { projectName }
-    );
-
-    // Generate AndroidManifest.xml (permisos de internet, microfono y usesCleartextTraffic)
-    await this.renderTemplate(
-      path.join(templatesDir, 'AndroidManifest.xml.ejs'),
-      path.join(projectPath, 'android/app/src/main/AndroidManifest.xml'),
       { projectName }
     );
 
