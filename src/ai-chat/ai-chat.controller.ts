@@ -29,8 +29,8 @@ class ChatDto {
 
 class FillFormDto {
   @IsString()
-  @IsNotEmpty()
-  transcription: string;
+  @IsOptional()
+  transcription?: string;
 
   @IsString()
   @IsNotEmpty()

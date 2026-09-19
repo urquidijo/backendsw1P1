@@ -31,15 +31,17 @@ function sanitizeFieldName(str) {
   return str.split('').map(char => replacements[char] || char).join('');
 }
 
-// Get first 3-4 visible attributes for table columns (excluding ID and relations)
+// Get first 3-4 visible attributes for display
 const visibleAttrs = attributes.filter(attr => !attr.isId && !attr.isRelation).slice(0, 4);
+const firstAttr = visibleAttrs.length > 0 ? visibleAttrs[0] : null;
+const otherAttrs = visibleAttrs.length > 1 ? visibleAttrs.slice(1) : [];
 %>import 'package:flutter/material.dart';
 import '../../models/<%= className.toLowerCase() %>.dart';
 import '../../services/<%= className.toLowerCase() %>_service.dart';
 import './<%= className.toLowerCase() %>_form_screen.dart';
 
 /// <%= toPascalCase(className) %> List Screen
-/// Displays all <%= pluralName %> with CRUD operations
+/// Muestra los registros con tarjetas modernas, búsqueda en tiempo real y CRUD completo
 class <%= toPascalCase(className) %>ListScreen extends StatefulWidget {
   const <%= toPascalCase(className) %>ListScreen({Key? key}) : super(key: key);
 
@@ -49,13 +51,42 @@ class <%= toPascalCase(className) %>ListScreen extends StatefulWidget {
 
 class _<%= toPascalCase(className) %>ListScreenState extends State<<%= toPascalCase(className) %>ListScreen> {
   List<<%= toPascalCase(className) %>> _<%= pluralName %> = [];
+  List<<%= toPascalCase(className) %>> _filteredList = [];
   bool _isLoading = true;
   String? _errorMessage;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _searchController.addListener(_filterData);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filterData() {
+    final query = _searchController.text.toLowerCase().trim();
+    if (query.isEmpty) {
+      setState(() => _filteredList = _<%= pluralName %>);
+    } else {
+      setState(() {
+        _filteredList = _<%= pluralName %>.where((item) {
+          final idStr = item.id?.toString() ?? '';
+<% if (firstAttr) { %>
+<% const sanFirst = sanitizeFieldName(firstAttr.name); %>
+          final firstVal = item.<%= sanFirst %>?.toString().toLowerCase() ?? '';
+          return idStr.contains(query) || firstVal.contains(query);
+<% } else { %>
+          return idStr.contains(query);
+<% } %>
+        }).toList();
+      });
+    }
   }
 
   Future<void> _loadData() async {
@@ -68,6 +99,7 @@ class _<%= toPascalCase(className) %>ListScreenState extends State<<%= toPascalC
       final data = await <%= toPascalCase(className) %>Service.getAll();
       setState(() {
         _<%= pluralName %> = data;
+        _filteredList = data;
         _isLoading = false;
       });
     } catch (e) {
@@ -82,16 +114,27 @@ class _<%= toPascalCase(className) %>ListScreenState extends State<<%= toPascalC
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Confirmar'),
-        content: const Text('¿Está seguro de eliminar este registro?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Confirmar'),
+          ],
+        ),
+        content: const Text('¿Estás seguro de que deseas eliminar este registro? Esta acción no se puede deshacer.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             child: const Text('Eliminar'),
           ),
         ],
@@ -104,7 +147,10 @@ class _<%= toPascalCase(className) %>ListScreenState extends State<<%= toPascalC
         _loadData();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Registro eliminado exitosamente')),
+            const SnackBar(
+              content: Text('Registro eliminado exitosamente'),
+              backgroundColor: Colors.green,
+            ),
           );
         }
       } catch (e) {
@@ -132,104 +178,285 @@ class _<%= toPascalCase(className) %>ListScreenState extends State<<%= toPascalC
 
   @override
   Widget build(BuildContext context) {
+    const primaryColor = Color(0xFF4F46E5);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('<%= toPascalCase(className) %>'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: _loadData,
+            tooltip: 'Actualizar lista',
+          ),
+        ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _errorMessage != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error, size: 64, color: Colors.red),
-                      const SizedBox(height: 16),
-                      Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        onPressed: _loadData,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Reintentar'),
-                      ),
-                    ],
-                  ),
-                )
-              : _<%= pluralName %>.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.inbox, size: 64, color: Colors.grey),
-                          const SizedBox(height: 16),
-                          const Text('No hay registros'),
-                          const SizedBox(height: 16),
-                          ElevatedButton.icon(
-                            onPressed: () => _navigateToForm(),
-                            icon: const Icon(Icons.add),
-                            label: const Text('Crear Nuevo'),
-                          ),
-                        ],
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _loadData,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.vertical,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: DataTable(
-                            columns: [
-                              const DataColumn(label: Text('ID')),
-<% visibleAttrs.forEach(function(attr) { %>
-                              const DataColumn(label: Text('<%= attr.name %>')),
-<% }); %>
-                              const DataColumn(label: Text('Acciones')),
+      body: Column(
+        children: [
+          // Barra de búsqueda rápida
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Buscar <%= varName %>...',
+                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B)),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, size: 20),
+                        onPressed: () => _searchController.clear(),
+                      )
+                    : null,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+
+          // Contador de registros
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${_filteredList.length} registros',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                ),
+                const Row(
+                  children: [
+                    Icon(Icons.mic_none_rounded, size: 16, color: primaryColor),
+                    SizedBox(width: 4),
+                    Text(
+                      'Voz IA integrada',
+                      style: TextStyle(fontSize: 12, color: primaryColor, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Contenido principal
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _errorMessage != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.cloud_off_rounded, size: 64, color: Colors.redAccent),
+                              const SizedBox(height: 16),
+                              Text(
+                                _errorMessage!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: Colors.redAccent, fontSize: 14),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                onPressed: _loadData,
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('Reintentar'),
+                              ),
                             ],
-                            rows: _<%= pluralName %>.map((<%= varName %>) {
-                              return DataRow(
-                                cells: [
-                                  DataCell(Text(<%= varName %>.id?.toString() ?? '')),
-<% visibleAttrs.forEach(function(attr) { %>
-<% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
-<% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
-<% if (mapToDartType(attr.type) === 'DateTime') { %>
-                                  DataCell(Text(<%= varName %>.<%= sanitizedFieldName %> != null ? '${<%= varName %>.<%= sanitizedFieldName %>!.day}/${<%= varName %>.<%= sanitizedFieldName %>!.month}/${<%= varName %>.<%= sanitizedFieldName %>!.year}' : '')),
-<% } else if (mapToDartType(attr.type) === 'bool') { %>
-                                  DataCell(Icon(<%= varName %>.<%= sanitizedFieldName %> == true ? Icons.check_circle : Icons.cancel, color: <%= varName %>.<%= sanitizedFieldName %> == true ? Colors.green : Colors.red)),
-<% } else { %>
-                                  DataCell(Text(<%= varName %>.<%= sanitizedFieldName %>?.toString() ?? '')),
-<% } %>
-<% }); %>
-                                  DataCell(
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.edit, color: Colors.blue),
-                                          onPressed: () => _navigateToForm(<%= varName %>),
-                                          tooltip: 'Editar',
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.delete, color: Colors.red),
-                                          onPressed: () => _delete(<%= varName %>.id!),
-                                          tooltip: 'Eliminar',
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }).toList(),
                           ),
                         ),
-                      ),
-                    ),
-      floatingActionButton: FloatingActionButton(
+                      )
+                    : _filteredList.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(32.0),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(20),
+                                    decoration: BoxDecoration(
+                                      color: primaryColor.withOpacity(0.08),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.inbox_rounded, size: 64, color: primaryColor),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  const Text(
+                                    'No se encontraron registros',
+                                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const Text(
+                                    'Puedes crear el primero tocando el botón inferior o dictándolo por voz.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  ElevatedButton.icon(
+                                    onPressed: () => _navigateToForm(),
+                                    icon: const Icon(Icons.add_rounded),
+                                    label: const Text('Crear Registro'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _loadData,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                              itemCount: _filteredList.length,
+                              separatorBuilder: (context, index) => const SizedBox(height: 10),
+                              itemBuilder: (context, index) {
+                                final <%= varName %> = _filteredList[index];
+                                return _buildCard(context, <%= varName %>);
+                              },
+                            ),
+                          ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _navigateToForm(),
-        tooltip: 'Crear nuevo <%= varName %>',
-        child: const Icon(Icons.add),
+        backgroundColor: primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 3,
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Nuevo', style: TextStyle(fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _buildCard(BuildContext context, <%= toPascalCase(className) %> <%= varName %>) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Fila superior: ID Badge y botones de acción
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEEF2FF),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '#${<%= varName %>.id}',
+                    style: const TextStyle(
+                      color: Color(0xFF4F46E5),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit_rounded, color: Color(0xFF0284C7), size: 20),
+                      onPressed: () => _navigateToForm(<%= varName %>),
+                      tooltip: 'Editar',
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                      onPressed: () => _delete(<%= varName %>.id!),
+                      tooltip: 'Eliminar',
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 6),
+
+<% if (firstAttr) { %>
+<% const sanFirst = sanitizeFieldName(firstAttr.name); %>
+            // Campo principal
+            Text(
+              <%= varName %>.<%= sanFirst %>?.toString() ?? 'Sin <%= firstAttr.name %>',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+            const SizedBox(height: 8),
+<% } %>
+
+            // Atributos secundarios en badges/chips
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+<% otherAttrs.forEach(function(attr) { %>
+<% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
+<% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
+<% const dartType = mapToDartType(attr.type); %>
+<% if (dartType === 'bool') { %>
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: <%= varName %>.<%= sanitizedFieldName %> == true ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '<%= attr.name %>: ${<%= varName %>.<%= sanitizedFieldName %> == true ? "Sí" : "No"}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: <%= varName %>.<%= sanitizedFieldName %> == true ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                    ),
+                  ),
+                ),
+<% } else if (dartType === 'DateTime') { %>
+                if (<%= varName %>.<%= sanitizedFieldName %> != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '<%= attr.name %>: ${<%= varName %>.<%= sanitizedFieldName %>!.day}/${<%= varName %>.<%= sanitizedFieldName %>!.month}/${<%= varName %>.<%= sanitizedFieldName %>!.year}',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF475569)),
+                    ),
+                  ),
+<% } else { %>
+                if (<%= varName %>.<%= sanitizedFieldName %> != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '<%= attr.name %>: ${<%= varName %>.<%= sanitizedFieldName %>}',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF475569)),
+                    ),
+                  ),
+<% } %>
+<% }); %>
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -4,8 +4,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 /// API Configuration
 /// This file contains the backend API URL configuration
 class ApiConfig {
-  // Automatically uses 10.0.2.2 on Android Emulator, and localhost on Web/Desktop
   // Backend Spring Boot (CRUD)
+  // Automatically uses 10.0.2.2 on Android Emulator, and localhost on Web/Desktop
   static String get baseUrl {
     if (kIsWeb) return 'http://localhost:8080';
     try {
@@ -14,23 +14,32 @@ class ApiConfig {
     return 'http://localhost:8080';
   }
 
-  // Backend NestJS (Servicio de IA para llenado por voz)
-  static String get aiBaseUrl {
-    if (kIsWeb) return 'http://localhost:3002';
+  // Backend NestJS desplegado en Railway (Servicio de IA para autocompletado por voz)
+  static const String deployedAiUrl = 'https://backendsw1p1-production.up.railway.app/api';
+
+  // Opción local para desarrollo
+  static String get localAiUrl {
+    if (kIsWeb) return 'http://localhost:3002/api';
     try {
-      if (Platform.isAndroid) return 'http://10.0.2.2:3002';
+      if (Platform.isAndroid) return 'http://10.0.2.2:3002/api';
     } catch (_) {}
-    return 'http://localhost:3002';
+    return 'http://localhost:3002/api';
   }
+
+  // Define si usa el backend local o el desplegado en Railway (por defecto Railway)
+  static bool useLocalAi = false;
+
+  /// URL base del servicio de IA (NestJS)
+  static String get aiBaseUrl => useLocalAi ? localAiUrl : deployedAiUrl;
 
   static const String apiPrefix = '/api';
 
-  /// Get full API URL
+  /// Get full API URL for CRUD (Spring Boot)
   static String get apiUrl => '$baseUrl$apiPrefix';
 
-  /// Get full API URL for AI Voice Form Fill
+  /// Get full API URL for AI Voice Form Fill (NestJS)
   static String get aiFillFormUrl => '$aiBaseUrl/ai-chat/fill-form';
 
   /// Timeout for HTTP requests (in seconds)
-  static const Duration timeout = Duration(seconds: 30);
+  static const Duration timeout = Duration(seconds: 25);
 }

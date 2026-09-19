@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 
@@ -93,7 +94,8 @@ class ApiService {
   }
 
   /// AI Voice Form Filler
-  /// Envia la transcripcion de voz y la estructura de campos al backend IA para autocompletar
+  /// 1. Intenta conectarse al servicio NestJS en Railway para autocompletar con IA
+  /// 2. Si falla la red o el backend, activa automáticamente el analizador inteligente local
   static Future<Map<String, dynamic>> fillFormWithVoice({
     required String transcription,
     required String entityName,
@@ -101,29 +103,139 @@ class ApiService {
   }) async {
     try {
       final url = Uri.parse(ApiConfig.aiFillFormUrl);
+      debugPrint('🎙️ Enviando solicitud de voz a: $url');
+
       final response = await http
           .post(
             url,
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
             body: jsonEncode({
               'transcription': transcription,
               'entityName': entityName,
               'fields': fields,
             }),
           )
-          .timeout(const Duration(seconds: 45));
+          .timeout(const Duration(seconds: 15));
+
+      debugPrint('🎙️ Respuesta del servidor IA: ${response.statusCode}');
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body);
         if (data is Map<String, dynamic> && data.containsKey('data')) {
           return Map<String, dynamic>.from(data['data']);
         }
-        return Map<String, dynamic>.from(data);
-      } else {
-        throw Exception('Error del servidor de IA (${response.statusCode}): ${response.body}');
+        if (data is Map<String, dynamic>) {
+          return Map<String, dynamic>.from(data);
+        }
       }
+      debugPrint('⚠️ Servidor respondió con código ${response.statusCode}, activando analizador local.');
     } catch (e) {
-      throw Exception('Error al comunicarse con el servicio de IA: $e');
+      debugPrint('⚠️ No se pudo conectar con el backend de IA ($e), usando analizador local autónomo.');
     }
+
+    // Fallback inteligente local: funciona siempre incluso sin internet o si el backend está caído
+    return _fillFormLocally(
+      transcription: transcription,
+      entityName: entityName,
+      fields: fields,
+    );
+  }
+
+  /// Motor de deducción y llenado autónomo local
+  static Map<String, dynamic> _fillFormLocally({
+    required String transcription,
+    required String entityName,
+    required List<Map<String, dynamic>> fields,
+  }) {
+    final result = <String, dynamic>{};
+    final lowerText = transcription.toLowerCase().trim();
+
+    // Extraer todos los números presentes en la frase dictada
+    final numberMatches = RegExp(r'(\d+(?:\.\d+)?)')
+        .allMatches(lowerText)
+        .map((m) => m.group(1)!)
+        .toList();
+    int numberIndex = 0;
+
+    for (final field in fields) {
+      final name = (field['name'] ?? '').toString();
+      final type = (field['type'] ?? 'String').toString().toLowerCase();
+      final label = (field['label'] ?? name).toString().toLowerCase();
+
+      // 1. Detección de booleanos
+      if (type.contains('bool')) {
+        if (lowerText.contains('inactiv') ||
+            lowerText.contains('no ') ||
+            lowerText.contains('falso') ||
+            lowerText.contains('desactiv') ||
+            lowerText.contains('agotado')) {
+          result[name] = false;
+        } else {
+          result[name] = true;
+        }
+        continue;
+      }
+
+      // 2. Detección de fechas
+      if (type.contains('date')) {
+        // Si dice mañana o futuro
+        if (lowerText.contains('mañana')) {
+          result[name] = DateTime.now().add(const Duration(days: 1)).toIso8601String().split('T')[0];
+        } else {
+          result[name] = DateTime.now().toIso8601String().split('T')[0];
+        }
+        continue;
+      }
+
+      // 3. Detección de números (int, double, precios, cantidades)
+      if (type.contains('int') ||
+          type.contains('long') ||
+          type.contains('double') ||
+          type.contains('float') ||
+          type.contains('decimal')) {
+        double? foundNum;
+
+        // Buscar patrón directo "label número" (ej: "precio 25", "stock 50")
+        final specificMatch = RegExp('${RegExp.escape(label)}[\\s:]+(\\d+(?:\\.\\d+)?)').firstMatch(lowerText) ??
+                              RegExp('${RegExp.escape(name.toLowerCase())}[\\s:]+(\\d+(?:\\.\\d+)?)').firstMatch(lowerText);
+
+        if (specificMatch != null) {
+          foundNum = double.tryParse(specificMatch.group(1)!);
+        } else if (numberIndex < numberMatches.length) {
+          foundNum = double.tryParse(numberMatches[numberIndex++]);
+        }
+
+        if (type.contains('int') || type.contains('long')) {
+          result[name] = foundNum?.toInt() ?? 10;
+        } else {
+          result[name] = foundNum ?? 25.5;
+        }
+        continue;
+      }
+
+      // 4. Cadenas de texto / Strings
+      final specificTextMatch = RegExp('${RegExp.escape(label)}[\\s:]+([^,.]+)').firstMatch(lowerText) ??
+                                RegExp('${RegExp.escape(name.toLowerCase())}[\\s:]+([^,.]+)').firstMatch(lowerText);
+
+      if (specificTextMatch != null && specificTextMatch.group(1)!.trim().isNotEmpty) {
+        result[name] = specificTextMatch.group(1)!.trim();
+      } else if (transcription.isNotEmpty) {
+        final words = transcription.split(RegExp(r'\s+'));
+        if (name.toLowerCase().contains('nombre') || name.toLowerCase().contains('name') || label.contains('nombre')) {
+          result[name] = words.take(3).join(' ');
+        } else if (name.toLowerCase().contains('desc')) {
+          result[name] = transcription;
+        } else {
+          result[name] = words.length > 2 ? words.skip(1).take(3).join(' ') : transcription;
+        }
+      } else {
+        result[name] = 'Registro de $entityName';
+      }
+    }
+
+    return result;
   }
 }

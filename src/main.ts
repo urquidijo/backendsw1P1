@@ -20,10 +20,14 @@ async function bootstrap() {
     forbidNonWhitelisted: true,
   }));
 
-  // CORS configuration
+  // CORS configuration: allow mobile emulators, flutter web, and Amplify
   app.enableCors({
-    origin: configService.get('CORS_ORIGIN', 'http://localhost:3000'),
+    origin: (origin, callback) => {
+      callback(null, true);
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
   });
 
   // Global prefix

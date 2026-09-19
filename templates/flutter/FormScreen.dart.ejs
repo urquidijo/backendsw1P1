@@ -45,7 +45,7 @@ import '../../services/<%= className.toLowerCase() %>_service.dart';
 import '../../services/api_service.dart';
 
 /// <%= toPascalCase(className) %> Form Screen
-/// Create or Edit <%= toPascalCase(className) %> with AI Voice Autofill
+/// Formulario moderno con autocompletado por voz e IA
 class <%= toPascalCase(className) %>FormScreen extends StatefulWidget {
   final <%= toPascalCase(className) %>? <%= varName %>;
 
@@ -76,8 +76,6 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
   bool _<%= sanitizedFieldName %> = false;
 <% } else if (dartType === 'DateTime') { %>
   DateTime? _<%= sanitizedFieldName %>;
-<% } else if (dartType === 'int' || dartType === 'double') { %>
-  final _<%= sanitizedFieldName %>Controller = TextEditingController();
 <% } else { %>
   final _<%= sanitizedFieldName %>Controller = TextEditingController();
 <% } %>
@@ -150,14 +148,8 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
       final available = await _speech.initialize();
       setState(() => _speechAvailable = available);
       if (!available) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Permiso de micrófono no concedido o reconocimiento de voz no disponible.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        // En emuladores o sin microfono nativo, permitir dictado por texto/simulador
+        _showDictationFallbackDialog();
         return;
       }
     }
@@ -178,8 +170,61 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
         }
       },
       localeId: 'es_ES',
-      listenFor: const Duration(seconds: 30),
-      pauseFor: const Duration(seconds: 4),
+    );
+  }
+
+  /// Diálogo alternativo para emuladores sin micrófono nativo
+  void _showDictationFallbackDialog() {
+    final textController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.mic_none_rounded, color: Color(0xFF4F46E5)),
+            SizedBox(width: 8),
+            Text('Dictar Registro con IA', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Dicta o escribe los datos del registro. La IA completará los campos automáticamente:',
+              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: textController,
+              autofocus: true,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'Ej: Nombre <%= className %> de prueba, precio 45, stock 80...',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              final text = textController.text.trim();
+              Navigator.pop(dialogContext);
+              if (text.isNotEmpty) {
+                _processAiVoiceFill(text);
+              }
+            },
+            icon: const Icon(Icons.auto_awesome_rounded),
+            label: const Text('Completar con IA'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -194,10 +239,10 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
           builder: (context, setModalState) {
             return Container(
               padding: const EdgeInsets.all(24.0),
-              decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24.0)),
-                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
+                boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10)],
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -206,7 +251,7 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade400,
+                      color: Colors.grey.shade300,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -214,40 +259,50 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        _isListening ? Icons.mic : Icons.mic_none,
-                        color: _isListening ? Colors.red : Colors.grey,
-                        size: 30,
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _isListening ? Colors.red.withOpacity(0.12) : const Color(0xFFEEF2FF),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+                          color: _isListening ? Colors.red : const Color(0xFF4F46E5),
+                          size: 32,
+                        ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _isListening ? 'Escuchando tu voz...' : 'Micrófono detenido',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _isListening ? 'Escuchando tu voz...' : 'Micrófono en pausa',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                          ),
+                          const Text(
+                            'Di los datos que deseas registrar',
+                            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                          ),
+                        ],
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Dicta los datos del <%= className %>. Los campos que no menciones se completarán con IA de forma coherente.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                   ),
                   const SizedBox(height: 16),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300),
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
-                    constraints: const BoxConstraints(minHeight: 60, maxHeight: 110),
+                    constraints: const BoxConstraints(minHeight: 70, maxHeight: 120),
                     child: SingleChildScrollView(
                       child: Text(
-                        _liveTranscription.isEmpty ? 'Habla ahora...' : _liveTranscription,
+                        _liveTranscription.isEmpty ? 'Habla ahora (ej: "precio 25, stock 100")...' : _liveTranscription,
                         style: TextStyle(
                           fontStyle: _liveTranscription.isEmpty ? FontStyle.italic : FontStyle.normal,
-                          color: _liveTranscription.isEmpty ? Colors.grey : Colors.black87,
+                          color: _liveTranscription.isEmpty ? const Color(0xFF94A3B8) : const Color(0xFF1E293B),
                           fontSize: 15,
                         ),
                       ),
@@ -277,7 +332,7 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
                               _processAiVoiceFill(_liveTranscription.trim());
                             }
                           },
-                          icon: const Icon(Icons.auto_awesome),
+                          icon: const Icon(Icons.auto_awesome_rounded),
                           label: const Text('Rellenar con IA'),
                         ),
                       ),
@@ -317,7 +372,7 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
             Expanded(child: Text('🧠 IA deduciendo campos faltantes y coherencias...')),
           ],
         ),
-        duration: Duration(seconds: 35),
+        duration: Duration(seconds: 15),
       ),
     );
 
@@ -369,7 +424,7 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✨ ¡Formulario autocompletado por voz e IA exitosamente!'),
+            content: Text('✨ ¡Formulario completado con éxito por voz e IA!'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 4),
           ),
@@ -380,7 +435,7 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al procesar con IA: $e'),
+            content: Text('Error al procesar: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -443,7 +498,7 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_isEditMode ? 'Actualizado exitosamente' : 'Creado exitosamente'),
+            content: Text(_isEditMode ? 'Registro actualizado con éxito' : 'Registro creado con éxito'),
             backgroundColor: Colors.green,
           ),
         );
@@ -461,198 +516,230 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
 
   @override
   Widget build(BuildContext context) {
+    const primaryColor = Color(0xFF4F46E5);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditMode ? 'Editar <%= toPascalCase(className) %>' : 'Nuevo <%= toPascalCase(className) %>'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           IconButton(
-            icon: _isAiProcessing
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(
-                    _isListening ? Icons.mic : Icons.mic_none,
-                    color: _isListening ? Colors.red : null,
-                  ),
-            tooltip: 'Rellenar por voz con IA',
+            icon: const Icon(Icons.mic_rounded),
+            tooltip: 'Dictar por voz',
             onPressed: _isAiProcessing ? null : _toggleVoiceRecording,
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _isAiProcessing ? null : _toggleVoiceRecording,
-        backgroundColor: _isListening
-            ? Colors.red
-            : Theme.of(context).colorScheme.primary,
+        backgroundColor: _isListening ? Colors.red : primaryColor,
         icon: _isAiProcessing
             ? const SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
               )
-            : Icon(_isListening ? Icons.stop : Icons.mic, color: Colors.white),
+            : Icon(_isListening ? Icons.stop_rounded : Icons.mic_rounded, color: Colors.white),
         label: Text(
           _isListening
               ? 'Detener'
               : _isAiProcessing
-                  ? 'IA Pensando...'
-                  : 'Rellenar con Voz',
-          style: const TextStyle(color: Colors.white),
+                  ? 'Analizando...'
+                  : 'Voz con IA',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 16.0),
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Banner de asistente por voz con IA
-                    Card(
-                      elevation: 0,
-                      color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.35),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                    // Banner Hero de dictado por voz con IA
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFEEF2FF), Color(0xFFE0E7FF)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFC7D2FE)),
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.auto_awesome,
-                              color: Theme.of(context).colorScheme.primary,
-                              size: 22,
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: const BoxDecoration(
+                              color: primaryColor,
+                              shape: BoxShape.circle,
                             ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Autocompletado Inteligente con Voz',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: Theme.of(context).colorScheme.primary,
-                                    ),
+                            child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 22),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Autocompletado con Voz e IA',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: Color(0xFF312E81),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _isListening
-                                        ? 'Escuchando... Di lo que desees registrar'
-                                        : _isAiProcessing
-                                            ? 'IA analizando y deduciendo campos faltantes...'
-                                            : 'Toca el micrófono para dictar; la IA deducirá campos faltantes',
-                                    style: TextStyle(
-                                      fontSize: 11.5,
-                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _isListening
+                                      ? 'Escuchando tu dictado...'
+                                      : _isAiProcessing
+                                          ? 'Analizando y deduciendo campos...'
+                                          : 'Dicta los datos y la IA rellenará el formulario',
+                                  style: const TextStyle(fontSize: 12, color: Color(0xFF4338CA)),
+                                ),
+                              ],
                             ),
-                            IconButton(
-                              icon: Icon(_isListening ? Icons.stop_circle : Icons.mic),
-                              color: _isListening ? Colors.red : Theme.of(context).colorScheme.primary,
-                              onPressed: _isAiProcessing ? null : _toggleVoiceRecording,
-                              tooltip: 'Hablar por micrófono',
+                          ),
+                          ElevatedButton(
+                            onPressed: _isAiProcessing ? null : _toggleVoiceRecording,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryColor,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
-                          ],
-                        ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.mic_rounded, size: 16),
+                                SizedBox(width: 4),
+                                Text('Dictar', style: TextStyle(fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-<% editableAttrs.forEach(function(attr, index) { %>
+
+                    const SizedBox(height: 20),
+
+<% editableAttrs.forEach(function(attr) { %>
 <% const dartType = attr.isRelation ? mapToDartType(attr.referencedIdType || idType) : mapToDartType(attr.type); %>
 <% const originalFieldName = attr.isRelation ? (attr.name + 'Id') : attr.name; %>
 <% const sanitizedFieldName = sanitizeFieldName(originalFieldName); %>
 <% const isRequired = !attr.nullable; %>
 <% const label = attr.isRelation ? attr.name + ' ID' : attr.name; %>
 <% if (dartType === 'bool') { %>
-                    // <%= label %> (Boolean)
-                    SwitchListTile(
-                      title: const Text('<%= label %>'),
-                      value: _<%= sanitizedFieldName %>,
-                      onChanged: (value) => setState(() => _<%= sanitizedFieldName %> = value),
+                    // Campo Booleano: <%= label %>
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: SwitchListTile(
+                        title: Text('<%= label %>', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                        value: _<%= sanitizedFieldName %>,
+                        activeColor: primaryColor,
+                        onChanged: (value) => setState(() => _<%= sanitizedFieldName %> = value),
+                      ),
                     ),
-                    const SizedBox(height: 16),
 <% } else if (dartType === 'DateTime') { %>
-                    // <%= label %> (Date)
-                    ListTile(
-                      title: const Text('<%= label %><%= isRequired ? ' *' : '' %>'),
-                      subtitle: Text(_<%= sanitizedFieldName %> != null ? DateFormat('dd/MM/yyyy').format(_<%= sanitizedFieldName %>!) : 'Seleccionar fecha'),
-                      trailing: const Icon(Icons.calendar_today),
-                      onTap: () async {
-                        final date = await showDatePicker(
-                          context: context,
-                          initialDate: _<%= sanitizedFieldName %> ?? DateTime.now(),
-                          firstDate: DateTime(1900),
-                          lastDate: DateTime(2100),
-                        );
-                        if (date != null) {
-                          setState(() => _<%= sanitizedFieldName %> = date);
-                        }
-                      },
+                    // Campo Fecha: <%= label %>
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: ListTile(
+                        leading: const Icon(Icons.calendar_month_rounded, color: primaryColor),
+                        title: Text('<%= label %><%= isRequired ? " *" : "" %>', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                        subtitle: Text(
+                          _<%= sanitizedFieldName %> != null ? DateFormat('dd/MM/yyyy').format(_<%= sanitizedFieldName %>!) : 'Seleccionar fecha',
+                          style: TextStyle(color: _<%= sanitizedFieldName %> != null ? const Color(0xFF1E293B) : const Color(0xFF94A3B8)),
+                        ),
+                        trailing: const Icon(Icons.arrow_drop_down_rounded),
+                        onTap: () async {
+                          final date = await showDatePicker(
+                            context: context,
+                            initialDate: _<%= sanitizedFieldName %> ?? DateTime.now(),
+                            firstDate: DateTime(1900),
+                            lastDate: DateTime(2100),
+                          );
+                          if (date != null) {
+                            setState(() => _<%= sanitizedFieldName %> = date);
+                          }
+                        },
+                      ),
                     ),
-                    const SizedBox(height: 16),
 <% } else if (dartType === 'int') { %>
-                    // <%= label %> (Integer)
-                    TextFormField(
-                      controller: _<%= sanitizedFieldName %>Controller,
-                      decoration: const InputDecoration(
-                        labelText: '<%= label %><%= isRequired ? ' *' : '' %>',
-                        border: OutlineInputBorder(),
+                    // Campo Numérico Entero: <%= label %>
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: TextFormField(
+                        controller: _<%= sanitizedFieldName %>Controller,
+                        decoration: InputDecoration(
+                          labelText: '<%= label %><%= isRequired ? " *" : "" %>',
+                          prefixIcon: const Icon(Icons.numbers_rounded, color: Color(0xFF64748B), size: 20),
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        validator: <%- isRequired ? "(value) => value == null || value.isEmpty ? 'Este campo es obligatorio' : null" : "null" %>,
                       ),
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      validator: <%- isRequired ? "(value) => value == null || value.isEmpty ? 'Campo requerido' : null" : "null" %>,
                     ),
-                    const SizedBox(height: 16),
 <% } else if (dartType === 'double') { %>
-                    // <%= label %> (Decimal)
-                    TextFormField(
-                      controller: _<%= sanitizedFieldName %>Controller,
-                      decoration: const InputDecoration(
-                        labelText: '<%= label %><%= isRequired ? ' *' : '' %>',
-                        border: OutlineInputBorder(),
+                    // Campo Decimal / Precio: <%= label %>
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: TextFormField(
+                        controller: _<%= sanitizedFieldName %>Controller,
+                        decoration: InputDecoration(
+                          labelText: '<%= label %><%= isRequired ? " *" : "" %>',
+                          prefixIcon: const Icon(Icons.attach_money_rounded, color: Color(0xFF64748B), size: 20),
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                        validator: <%- isRequired ? "(value) => value == null || value.isEmpty ? 'Este campo es obligatorio' : null" : "null" %>,
                       ),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
-                      validator: <%- isRequired ? "(value) => value == null || value.isEmpty ? 'Campo requerido' : null" : "null" %>,
                     ),
-                    const SizedBox(height: 16),
 <% } else { %>
-                    // <%= label %> (String)
-                    TextFormField(
-                      controller: _<%= sanitizedFieldName %>Controller,
-                      decoration: const InputDecoration(
-                        labelText: '<%= label %><%= isRequired ? ' *' : '' %>',
-                        border: OutlineInputBorder(),
+                    // Campo Texto: <%= label %>
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: TextFormField(
+                        controller: _<%= sanitizedFieldName %>Controller,
+                        decoration: InputDecoration(
+                          labelText: '<%= label %><%= isRequired ? " *" : "" %>',
+                          prefixIcon: const Icon(Icons.edit_note_rounded, color: Color(0xFF64748B), size: 20),
+                        ),
+                        maxLines: <%= attr.type === 'String' && attr.length && attr.length > 100 ? '3' : '1' %>,
+                        validator: <%- isRequired ? "(value) => value == null || value.isEmpty ? 'Este campo es obligatorio' : null" : "null" %>,
                       ),
-                      maxLines: <%= attr.type === 'String' && attr.length && attr.length > 100 ? '3' : '1' %>,
-                      validator: <%- isRequired ? "(value) => value == null || value.isEmpty ? 'Campo requerido' : null" : "null" %>,
                     ),
-                    const SizedBox(height: 16),
 <% } %>
 <% }); %>
-                    const SizedBox(height: 24),
+
+                    const SizedBox(height: 16),
+
+                    // Botón principal de guardar
                     ElevatedButton.icon(
                       onPressed: _submit,
-                      icon: Icon(_isEditMode ? Icons.save : Icons.add),
-                      label: Text(_isEditMode ? 'Guardar Cambios' : 'Crear'),
+                      icon: Icon(_isEditMode ? Icons.check_circle_rounded : Icons.add_circle_rounded),
+                      label: Text(_isEditMode ? 'Actualizar Registro' : 'Guardar Registro'),
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.all(16),
+                        backgroundColor: primaryColor,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                     ),
-                    const SizedBox(height: 60), // Margen inferior para que el FAB no tape el botón
+
+                    const SizedBox(height: 80),
                   ],
                 ),
               ),
