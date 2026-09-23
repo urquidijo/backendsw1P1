@@ -374,7 +374,10 @@ export class CodeGenerationService {
         continue;
       }
 
-      const targetClassName = targetClass.name;
+      // Sanitize target class name to remove spaces → PascalCase (e.g. "Order Details" → "OrderDetails")
+      const targetClassName = this.sanitizeClassName(targetClass.name);
+      // snake_case for table/column names (e.g. "OrderDetails" → "order_details")
+      const targetTableName = targetClassName.replace(/([A-Z])/g, (m, l, o) => o > 0 ? '_' + m.toLowerCase() : m.toLowerCase());
 
       // Get the ID type of the target class
       const targetIdAttr = targetClass.attributes.find((attr: any) => attr.stereotype === 'id');
@@ -394,15 +397,15 @@ export class CodeGenerationService {
         result.push({
           name: relationName,
           type: targetClassName,
-          columnName: `${targetClassName.toLowerCase()}_id`,
+          columnName: `${targetTableName}_id`,
           nullable: true,
           unique: false,
           isId: false,
           isRelation: true,
           relationType: 'MANY_TO_ONE',
-          referencedIdType: targetIdType, // ADDED: Type of the referenced entity's ID
+          referencedIdType: targetIdType,
           foreignKey: {
-            referencedTable: targetClass.name.toLowerCase(),
+            referencedTable: targetTableName,
             onDelete: 'CASCADE',
             onUpdate: 'CASCADE',
           },
@@ -430,7 +433,7 @@ export class CodeGenerationService {
 
         // First, check if intermediateTable is defined in the relation
         if (relation.intermediateTable && relation.intermediateTable.name) {
-          joinTableName = relation.intermediateTable.name.toLowerCase();
+          joinTableName = relation.intermediateTable.name.toLowerCase().replace(/\s+/g, '_');
           console.log(`🔗 Using explicit intermediate table name: ${joinTableName}`);
 
           // Log intermediate table attributes
@@ -439,7 +442,10 @@ export class CodeGenerationService {
           }
         } else {
           // Generate consistent join table name by sorting alphabetically
-          const tables = [className.toLowerCase(), targetClassName.toLowerCase()].sort();
+          const tables = [
+            className.replace(/([A-Z])/g, (m, l, o) => o > 0 ? '_' + m.toLowerCase() : m.toLowerCase()),
+            targetTableName,
+          ].sort();
           joinTableName = `${tables[0]}_${tables[1]}`;
           console.log(`🔗 Generated join table name (alphabetically sorted): ${joinTableName}`);
         }
@@ -453,12 +459,12 @@ export class CodeGenerationService {
           isRelation: true,
           relationType: 'MANY_TO_MANY',
           joinTable: joinTableName,
-          joinColumn: `${className.toLowerCase()}_id`,
-          inverseJoinColumn: `${targetClassName.toLowerCase()}_id`,
+          joinColumn: `${className.replace(/([A-Z])/g, (m, l, o) => o > 0 ? '_' + m.toLowerCase() : m.toLowerCase())}_id`,
+          inverseJoinColumn: `${targetTableName}_id`,
           foreignKey: {
-            referencedTable: targetClass.name.toLowerCase(),
+            referencedTable: targetTableName,
           },
-          intermediateTableData: relation.intermediateTable, // AÑADIDO: Pasar metadata completa
+          intermediateTableData: relation.intermediateTable,
         });
       } else if (relationType === 'ONE_TO_ONE') {
         // Check if this side needs the FK based on multiplicity analysis
@@ -466,20 +472,20 @@ export class CodeGenerationService {
 
         if (multiplicityAnalysis.needsFk) {
           // This side has the FK (the optional side in 1 to 0..1)
-          console.log(`✅ [ONE_TO_ONE] Adding FK field in ${className}: ${relationName} (${targetClassName.toLowerCase()}_id)`);
+          console.log(`✅ [ONE_TO_ONE] Adding FK field in ${className}: ${relationName} (${targetTableName}_id)`);
 
           result.push({
             name: relationName,
             type: targetClassName,
-            columnName: `${targetClassName.toLowerCase()}_id`,
+            columnName: `${targetTableName}_id`,
             nullable: true,
             unique: false,
             isId: false,
             isRelation: true,
             relationType: 'ONE_TO_ONE',
-            referencedIdType: targetIdType, // ADDED: Type of the referenced entity's ID
+            referencedIdType: targetIdType,
             foreignKey: {
-              referencedTable: targetClass.name.toLowerCase(),
+              referencedTable: targetTableName,
               onDelete: 'CASCADE',
               onUpdate: 'CASCADE',
             },
