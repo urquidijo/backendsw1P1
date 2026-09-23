@@ -8,7 +8,8 @@ function uuid() {
   });
 }
 
-// Helper para construir body de ejemplo
+// Helper para construir body de ejemplo como JSON-string escapado
+// (se inserta como valor de "raw" en el JSON de Postman, necesita ser string válido)
 function buildBody(cls) {
   var fields = cls.attributes.filter(function(a) { return !a.isId && !a.isRelation; });
   var obj = {};
@@ -19,7 +20,9 @@ function buildBody(cls) {
       obj[a.name] = a.sampleValue;
     }
   });
-  return JSON.stringify(obj, null, 2);
+  // JSON.stringify anidado: convierte el objeto a JSON y luego lo serializa
+  // como string JSON para poder incrustarlo de forma segura dentro del JSON externo
+  return JSON.stringify(JSON.stringify(obj, null, 2));
 }
 %>
 {
@@ -84,7 +87,7 @@ function buildBody(cls) {
             ],
             "body": {
               "mode": "raw",
-              "raw": "<%- buildBody(cls) %>",
+              "raw": <%- buildBody(cls) %>,
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -106,7 +109,7 @@ function buildBody(cls) {
             ],
             "body": {
               "mode": "raw",
-              "raw": "<%- buildBody(cls) %>",
+              "raw": <%- buildBody(cls) %>,
               "options": { "raw": { "language": "json" } }
             },
             "url": {

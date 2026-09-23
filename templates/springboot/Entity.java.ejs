@@ -21,6 +21,9 @@ import java.util.Set;
 <% if (isParentInInheritance) { %>
 @Inheritance(strategy = InheritanceType.JOINED)
 <% } %>
+<% if (parentClass) { %>
+@PrimaryKeyJoinColumn(name = "id")
+<% } %>
 public class <%= className %><% if (parentClass) { %> extends <%= parentClass %><% } %> {
 
     public <%= className %>() {
