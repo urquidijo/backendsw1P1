@@ -1,0 +1,141 @@
+<%
+// Helper para generar UUID v4 simple
+function uuid() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0;
+    var v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+// Helper para construir body de ejemplo
+function buildBody(cls) {
+  var fields = cls.attributes.filter(function(a) { return !a.isId && !a.isRelation; });
+  var obj = {};
+  fields.forEach(function(a) {
+    try {
+      obj[a.name] = JSON.parse(a.sampleValue);
+    } catch(e) {
+      obj[a.name] = a.sampleValue;
+    }
+  });
+  return JSON.stringify(obj, null, 2);
+}
+%>
+{
+  "info": {
+    "_postman_id": "<%= uuid() %>",
+    "name": "<%= projectName %> API",
+    "description": "Coleccion generada automaticamente para el proyecto <%= projectName %>. Base URL: http://localhost:8080",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    }
+  ],
+  "item": [
+<% classes.forEach(function(cls, clsIndex) { %>
+    {
+      "name": "<%= cls.className %>",
+      "description": "CRUD endpoints para la entidad <%= cls.className %> - Ruta base: /api/<%= cls.pluralName %>",
+      "item": [
+        {
+          "name": "GET Listar todos los <%= cls.pluralName %>",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/<%= cls.pluralName %>",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "<%= cls.pluralName %>"]
+            },
+            "description": "GET http://localhost:8080/api/<%= cls.pluralName %>\nRetorna la lista completa de <%= cls.className %>.\nResponse 200: Array de objetos."
+          },
+          "response": []
+        },
+        {
+          "name": "GET <%= cls.className %> por ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/<%= cls.pluralName %>/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "<%= cls.pluralName %>", "1"]
+            },
+            "description": "GET http://localhost:8080/api/<%= cls.pluralName %>/{id}\nRetorna un registro por ID.\nResponse 200: Objeto. Response 404: Not found."
+          },
+          "response": []
+        },
+        {
+          "name": "POST Crear <%= cls.className %>",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<%- buildBody(cls) %>",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/<%= cls.pluralName %>",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "<%= cls.pluralName %>"]
+            },
+            "description": "POST http://localhost:8080/api/<%= cls.pluralName %>\nCrea un nuevo registro. El campo id se genera automaticamente.\nResponse 201: Objeto creado."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT Actualizar <%= cls.className %>",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<%- buildBody(cls) %>",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/<%= cls.pluralName %>/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "<%= cls.pluralName %>", "1"]
+            },
+            "description": "PUT http://localhost:8080/api/<%= cls.pluralName %>/{id}\nActualiza un registro existente.\nResponse 200: Objeto actualizado. Response 404: Not found."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE Eliminar <%= cls.className %>",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/<%= cls.pluralName %>/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "<%= cls.pluralName %>", "1"]
+            },
+            "description": "DELETE http://localhost:8080/api/<%= cls.pluralName %>/{id}\nElimina un registro por ID.\nResponse 204: Sin contenido. Response 404: Not found."
+          },
+          "response": []
+        }
+      ]
+    }<%= clsIndex < classes.length - 1 ? ',' : '' %>
+<% }); %>
+  ]
+}

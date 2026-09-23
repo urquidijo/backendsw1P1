@@ -761,6 +761,13 @@ export class CodeGenerationService {
       { projectName, classes }
     );
 
+    // Generate Postman Collection (importable JSON)
+    await this.renderTemplate(
+      path.join(templatesDir, 'PostmanCollection.json.ejs'),
+      path.join(projectPath, `${projectName}.postman_collection.json`),
+      { projectName, classes }
+    );
+
     // Generate exception handlers
     const exceptionPath = `src/main/java/${basePackage.replace(/\./g, '/')}/exception/`;
     await this.renderTemplate(
