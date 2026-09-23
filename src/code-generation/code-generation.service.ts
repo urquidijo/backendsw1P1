@@ -226,14 +226,22 @@ export class CodeGenerationService {
       .join('');
   }
 
+  private toSnakeCase(pascalName: string): string {
+    // Converts PascalCase to snake_case: "OrderDetails" → "order_details"
+    return pascalName
+      .replace(/([A-Z])/g, (m, l, offset) => offset > 0 ? '_' + m.toLowerCase() : m.toLowerCase());
+  }
+
   private transformClasses(umlClasses: any[], relations: any[]) {
     return umlClasses.map((umlClass) => {
       // Sanitize class name: remove spaces and convert to PascalCase for valid Java identifiers
       const className = this.sanitizeClassName(umlClass.name);
       const varName = className.charAt(0).toLowerCase() + className.slice(1);
-      // For plural/table names: use snake_case (e.g. "order_details") based on original sanitized name
-      const pluralName = this.pluralize(className.toLowerCase().replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase());
-      const tableName = className.toLowerCase().replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
+      // snake_case base for DB names: "OrderDetails" → "order_details"
+      const snakeName = this.toSnakeCase(className);
+      // Use PLURAL for table names to avoid SQL reserved words (e.g. "user" → "users", "order" → "orders")
+      const pluralName = this.pluralize(snakeName);
+      const tableName = pluralName; // tables always plural (same as API endpoints)
 
       // Check if this class is a child in an inheritance relationship
       const inheritanceRelation = relations.find(r => r.type === 'INHERITANCE' && r.sourceClassId === umlClass.id);
@@ -376,8 +384,10 @@ export class CodeGenerationService {
 
       // Sanitize target class name to remove spaces → PascalCase (e.g. "Order Details" → "OrderDetails")
       const targetClassName = this.sanitizeClassName(targetClass.name);
-      // snake_case for table/column names (e.g. "OrderDetails" → "order_details")
-      const targetTableName = targetClassName.replace(/([A-Z])/g, (m, l, o) => o > 0 ? '_' + m.toLowerCase() : m.toLowerCase());
+      // PLURAL snake_case for table name (avoids reserved words: "user"→"users", "order"→"orders")
+      const targetTableName = this.pluralize(this.toSnakeCase(targetClassName));
+      // SINGULAR snake_case for FK column prefix: customer_id, user_id (not customers_id)
+      const targetFkPrefix = this.toSnakeCase(targetClassName);
 
       // Get the ID type of the target class
       const targetIdAttr = targetClass.attributes.find((attr: any) => attr.stereotype === 'id');
@@ -397,7 +407,7 @@ export class CodeGenerationService {
         result.push({
           name: relationName,
           type: targetClassName,
-          columnName: `${targetTableName}_id`,
+          columnName: `${targetFkPrefix}_id`,          // e.g. user_id (singular)
           nullable: true,
           unique: false,
           isId: false,
@@ -405,7 +415,7 @@ export class CodeGenerationService {
           relationType: 'MANY_TO_ONE',
           referencedIdType: targetIdType,
           foreignKey: {
-            referencedTable: targetTableName,
+            referencedTable: targetTableName,           // e.g. users (plural)
             onDelete: 'CASCADE',
             onUpdate: 'CASCADE',
           },
@@ -441,11 +451,9 @@ export class CodeGenerationService {
             console.log(`   Attributes:`, relation.intermediateTable.attributes);
           }
         } else {
-          // Generate consistent join table name by sorting alphabetically
-          const tables = [
-            className.replace(/([A-Z])/g, (m, l, o) => o > 0 ? '_' + m.toLowerCase() : m.toLowerCase()),
-            targetTableName,
-          ].sort();
+          // Generate consistent join table name by sorting alphabetically (use singular snake_case)
+          const srcSnake = this.toSnakeCase(className);
+          const tables = [srcSnake, targetFkPrefix].sort();
           joinTableName = `${tables[0]}_${tables[1]}`;
           console.log(`🔗 Generated join table name (alphabetically sorted): ${joinTableName}`);
         }
@@ -459,10 +467,10 @@ export class CodeGenerationService {
           isRelation: true,
           relationType: 'MANY_TO_MANY',
           joinTable: joinTableName,
-          joinColumn: `${className.replace(/([A-Z])/g, (m, l, o) => o > 0 ? '_' + m.toLowerCase() : m.toLowerCase())}_id`,
-          inverseJoinColumn: `${targetTableName}_id`,
+          joinColumn: `${this.toSnakeCase(className)}_id`,
+          inverseJoinColumn: `${targetFkPrefix}_id`,
           foreignKey: {
-            referencedTable: targetTableName,
+            referencedTable: targetTableName,           // plural table name
           },
           intermediateTableData: relation.intermediateTable,
         });
@@ -472,12 +480,12 @@ export class CodeGenerationService {
 
         if (multiplicityAnalysis.needsFk) {
           // This side has the FK (the optional side in 1 to 0..1)
-          console.log(`✅ [ONE_TO_ONE] Adding FK field in ${className}: ${relationName} (${targetTableName}_id)`);
+          console.log(`✅ [ONE_TO_ONE] Adding FK field in ${className}: ${relationName} (${targetFkPrefix}_id)`);
 
           result.push({
             name: relationName,
             type: targetClassName,
-            columnName: `${targetTableName}_id`,
+            columnName: `${targetFkPrefix}_id`,        // e.g. user_id (singular)
             nullable: true,
             unique: false,
             isId: false,
@@ -485,7 +493,7 @@ export class CodeGenerationService {
             relationType: 'ONE_TO_ONE',
             referencedIdType: targetIdType,
             foreignKey: {
-              referencedTable: targetTableName,
+              referencedTable: targetTableName,         // e.g. users (plural)
               onDelete: 'CASCADE',
               onUpdate: 'CASCADE',
             },
@@ -513,6 +521,7 @@ export class CodeGenerationService {
 
     return result;
   }
+
 
   /**
    * Analyze multiplicity to determine relationship type and FK direction
