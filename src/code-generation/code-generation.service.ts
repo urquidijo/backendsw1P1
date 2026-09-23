@@ -218,12 +218,22 @@ export class CodeGenerationService {
     console.log('✅ Diagram validated and normalized');
   }
 
+  private sanitizeClassName(name: string): string {
+    // Converts "Order Details" → "OrderDetails", "shopping cart" → "ShoppingCart"
+    return name
+      .split(/[\s_\-]+/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join('');
+  }
+
   private transformClasses(umlClasses: any[], relations: any[]) {
     return umlClasses.map((umlClass) => {
-      const className = umlClass.name;
+      // Sanitize class name: remove spaces and convert to PascalCase for valid Java identifiers
+      const className = this.sanitizeClassName(umlClass.name);
       const varName = className.charAt(0).toLowerCase() + className.slice(1);
-      const pluralName = this.pluralize(className.toLowerCase());
-      const tableName = className.toLowerCase();
+      // For plural/table names: use snake_case (e.g. "order_details") based on original sanitized name
+      const pluralName = this.pluralize(className.toLowerCase().replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase());
+      const tableName = className.toLowerCase().replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
 
       // Check if this class is a child in an inheritance relationship
       const inheritanceRelation = relations.find(r => r.type === 'INHERITANCE' && r.sourceClassId === umlClass.id);
@@ -241,7 +251,8 @@ export class CodeGenerationService {
 
       // If this class inherits from a parent, include parent's attributes for DTO/Service generation
       if (parentClass) {
-        const parentAttributes = this.transformAttributes(parentClass.attributes, parentClass.id, parentClass.name, relations, umlClasses, null);
+        const parentClassName = this.sanitizeClassName(parentClass.name);
+        const parentAttributes = this.transformAttributes(parentClass.attributes, parentClass.id, parentClassName, relations, umlClasses, null);
         // Prepend parent attributes (they should come first, excluding ID which child already has with same column name)
         const parentAttrsExceptId = parentAttributes.filter(a => !a.isId);
         attributes = [...parentAttrsExceptId, ...attributes];
@@ -277,11 +288,12 @@ export class CodeGenerationService {
         attributes,
         uniqueFields,
         sampleData,
-        parentClass: parentClass ? parentClass.name : null,
+        parentClass: parentClass ? this.sanitizeClassName(parentClass.name) : null,
         isParentInInheritance,
       };
     });
   }
+
 
   private transformAttributes(attributes: any[], classId: string, className: string, relations: any[], allClasses: any[], parentClass?: any) {
     const result = [];
