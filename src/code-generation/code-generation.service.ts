@@ -685,14 +685,79 @@ export class CodeGenerationService {
   }
 
   private pluralize(word: string): string {
-    if (word.endsWith('y')) {
-      return word.slice(0, -1) + 'ies';
-    } else if (word.endsWith('s')) {
-      return word + 'es';
-    } else {
-      return word + 's';
+    if (!word) return word;
+
+    // For snake_case compound words (e.g. "order_details"), pluralize only the last segment
+    if (word.includes('_')) {
+      const parts = word.split('_');
+      const lastPart = parts[parts.length - 1];
+      parts[parts.length - 1] = this.pluralizeSingle(lastPart);
+      return parts.join('_');
     }
+
+    return this.pluralizeSingle(word);
   }
+
+  private pluralizeSingle(word: string): string {
+    if (!word) return word;
+
+    const lower = word.toLowerCase();
+
+    // Words that are already plural or uncountable (don't change)
+    const invariant = [
+      'details', 'news', 'series', 'species', 'deer', 'sheep', 'fish',
+      'information', 'data', 'status', 'means', 'offspring', 'rice',
+    ];
+    if (invariant.includes(lower)) return word;
+
+    // Already ends in common plural patterns - don't double pluralize
+    // Check for words ending in -ses, -tes, -ies, -ves, -oes
+    if (lower.endsWith('ses') || lower.endsWith('ies') || lower.endsWith('ves') ||
+        lower.endsWith('oes') || lower.endsWith('xes') || lower.endsWith('ches') ||
+        lower.endsWith('shes') || lower.endsWith('zes')) {
+      return word; // already plural
+    }
+
+    // Irregular plurals
+    const irregulars: Record<string, string> = {
+      person: 'people', man: 'men', woman: 'women', child: 'children',
+      tooth: 'teeth', foot: 'feet', mouse: 'mice', goose: 'geese',
+      ox: 'oxen', leaf: 'leaves', half: 'halves', knife: 'knives',
+      wolf: 'wolves', shelf: 'shelves', loaf: 'loaves', life: 'lives',
+    };
+    if (irregulars[lower]) {
+      return word.charAt(0) === word.charAt(0).toUpperCase()
+        ? this.capitalize(irregulars[lower])
+        : irregulars[lower];
+    }
+
+    // Words ending in consonant + y → replace y with ies (e.g. category→categories)
+    if (lower.endsWith('y') && lower.length > 1 && !'aeiou'.includes(lower[lower.length - 2])) {
+      return word.slice(0, -1) + 'ies';
+    }
+
+    // Words ending in -fe → -ves (e.g. wife→wives)
+    if (lower.endsWith('fe')) {
+      return word.slice(0, -2) + 'ves';
+    }
+
+    // Words ending in s, x, z, ch, sh → add es
+    if (lower.endsWith('s') || lower.endsWith('x') || lower.endsWith('z') ||
+        lower.endsWith('ch') || lower.endsWith('sh')) {
+      // If already ends in 's' check it's not just adding -s to a singular (e.g. "bus"→"buses")
+      if (lower.endsWith('ss') || lower.endsWith('us') || lower.endsWith('is')) {
+        return word + 'es'; // e.g. class→classes, bus→buses, axis→axes
+      }
+      if (lower.endsWith('s')) {
+        return word; // already plural (e.g. "orders", "carts") — don't add anything
+      }
+      return word + 'es';
+    }
+
+    // Default: add s
+    return word + 's';
+  }
+
 
   private capitalize(str: string): string {
     return str.charAt(0).toUpperCase() + str.slice(1);
