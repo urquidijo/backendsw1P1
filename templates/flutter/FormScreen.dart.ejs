@@ -111,7 +111,22 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
       _speechAvailable = await _speech.initialize(
         onError: (val) {
           debugPrint('Speech error: ${val.errorMsg}');
-          if (mounted) setState(() => _isListening = false);
+          if (mounted) {
+            setState(() => _isListening = false);
+            // On timeout or permanent error, show text fallback
+            if (val.errorMsg.contains('timeout') ||
+                val.errorMsg.contains('error_speech_timeout') ||
+                val.errorMsg.contains('error_no_match')) {
+              if (_liveTranscription.trim().isNotEmpty) {
+                _processAiVoiceFill(_liveTranscription.trim());
+              } else {
+                // Reinitialize and offer text fallback
+                _speech = stt.SpeechToText();
+                _initSpeech();
+                _showDictationFallbackDialog();
+              }
+            }
+          }
         },
         onStatus: (status) {
           debugPrint('Speech status: $status');
@@ -145,10 +160,11 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
     }
 
     if (!_speechAvailable) {
+      // Reinitialize engine in case it got into a bad state
+      _speech = stt.SpeechToText();
       final available = await _speech.initialize();
       setState(() => _speechAvailable = available);
       if (!available) {
-        // En emuladores o sin microfono nativo, permitir dictado por texto/simulador
         _showDictationFallbackDialog();
         return;
       }
@@ -167,11 +183,21 @@ class _<%= toPascalCase(className) %>FormScreenState extends State<<%= toPascalC
           setState(() {
             _liveTranscription = result.recognizedWords;
           });
+          // If final result and has content, process immediately
+          if (result.finalResult && result.recognizedWords.trim().isNotEmpty) {
+            _speech.stop();
+          }
         }
       },
       localeId: 'es_ES',
+      listenFor: const Duration(seconds: 60),  // max recording time
+      pauseFor: const Duration(seconds: 5),    // stop after 5s of silence
+      cancelOnError: false,                     // don't cancel on first error
+      partialResults: true,                     // show live transcription
+      listenMode: stt.ListenMode.dictation,     // dictation mode: better for long speech
     );
   }
+
 
   /// Diálogo alternativo para emuladores sin micrófono nativo
   void _showDictationFallbackDialog() {
